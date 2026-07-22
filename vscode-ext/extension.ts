@@ -8,10 +8,10 @@ let sidecarManager: SidecarManager | undefined;
 let chatViewProvider: ChatViewProvider | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('AI Code Agent extension activated');
+    console.log('Ferrite extension activated');
 
     // Initialize the sidecar manager
-    const binaryName = os.platform() === 'win32' ? 'ai-agent.exe' : 'ai-agent';
+    const binaryName = os.platform() === 'win32' ? 'ferrite-agent.exe' : 'ferrite-agent';
     const binaryPath = path.join(context.extensionPath, 'bin', binaryName);
 
     sidecarManager = new SidecarManager(binaryPath);
@@ -25,23 +25,23 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(
-            'aiCodeAgent.chatView',
+            'ferrite.chatView',
             chatViewProvider
         )
     );
 
     // Register commands
     context.subscriptions.push(
-        vscode.commands.registerCommand('aiCodeAgent.openSettings', () => {
+        vscode.commands.registerCommand('ferrite.openSettings', () => {
             vscode.commands.executeCommand(
                 'workbench.action.openSettings',
-                'aiCodeAgent'
+                'ferrite'
             );
         })
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand('aiCodeAgent.newSession', async () => {
+        vscode.commands.registerCommand('ferrite.newSession', async () => {
             const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '.';
             if (sidecarManager && sidecarManager.isRunning()) {
                 const result = await sidecarManager.sendRequest('initialize', {
@@ -61,7 +61,7 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     context.subscriptions.push(
-        vscode.commands.registerCommand('aiCodeAgent.clearSessions', async () => {
+        vscode.commands.registerCommand('ferrite.clearSessions', async () => {
             if (sidecarManager && sidecarManager.isRunning()) {
                 const result = await sidecarManager.sendRequest('listSessions', {});
                 // sessions are { id: string; title: string }[] returned by the sidecar
@@ -81,7 +81,7 @@ export function activate(context: vscode.ExtensionContext) {
     // Watch configuration changes
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration((e) => {
-            if (e.affectsConfiguration('aiCodeAgent')) {
+            if (e.affectsConfiguration('ferrite')) {
                 syncConfigToSidecar();
             }
         })
@@ -95,7 +95,7 @@ export function activate(context: vscode.ExtensionContext) {
             return;
         }
 
-        const config = vscode.workspace.getConfiguration('aiCodeAgent');
+        const config = vscode.workspace.getConfiguration('ferrite');
         const params: Record<string, unknown> = {
             provider: config.get<string>('provider', 'deepseek'),
             model: config.get<string>('model', 'deepseek-chat'),

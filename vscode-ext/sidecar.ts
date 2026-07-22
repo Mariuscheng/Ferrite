@@ -71,7 +71,7 @@ export class SidecarManager {
 
         try {
             if (!fs.existsSync(this.binaryPath)) {
-                throw new Error(`Sidecar binary not found: ${this.binaryPath}. Run build to copy ai-agent into bin/.`);
+                throw new Error(`Sidecar binary not found: ${this.binaryPath}. Run build to copy ferrite-agent into bin/.`);
             }
 
             this.process = cp.spawn(this.binaryPath, [], {

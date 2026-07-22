@@ -178,7 +178,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 },
             })));
 
-        const cfg = vscode.workspace.getConfiguration('aiCodeAgent');
+        const cfg = vscode.workspace.getConfiguration('ferrite');
 
         return {
             workspaceRoot: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '.',

@@ -1,6 +1,8 @@
-# AI Code Agent (Beta)
+# 🧲 Ferrite (Beta)
 
-一個執行在你本機的 VS Code AI 編碼助手擴充功能，支援 **DeepSeek**、**OpenAI**、**Anthropic (Claude)** 及 **Ollama** 等多種 AI 供應商。
+> *Rust-powered AI sidecar for VS Code*
+
+一個以 Rust 打造核心引擎的 VS Code AI 編碼助手，支援 **DeepSeek**、**OpenAI**、**Anthropic (Claude)** 及 **Ollama** 等多種 AI 供應商。
 
 > ⚠️ **Beta 階段**：此擴充功能仍在測試中，功能可能變動，歡迎回報問題。
 
@@ -12,11 +14,11 @@
 ┌─────────────────────────────────────┐
 │         VS Code 擴充功能              │
 │  ┌───────────────────────────────┐  │
-│  │  Webview UI (聊天介面)        │  │
+│  │  Webview UI (聊天介面)         │  │
 │  └───────────┬───────────────────┘  │
 │              │ JSON-RPC (stdio)      │
 │  ┌───────────▼───────────────────┐  │
-│  │  Rust Sidecar (ai-agent.exe)  │  │
+│  │  Rust Sidecar (ferrite-agent) │  │
 │  │  - AI Provider 路由            │  │
 │  │  - 工具呼叫 (Tool Calls)       │  │
 │  │  - 對話管理                    │  │
@@ -103,7 +105,7 @@ npx vsce package
 ### 安裝 .vsix
 
 ```bash
-code --install-extension ai-code-agent-0.1.0.vsix
+code --install-extension ferrite-0.1.0.vsix
 ```
 
 或在 VS Code 中：`Extensions` → `...` → `Install from VSIX...`
@@ -112,18 +114,18 @@ code --install-extension ai-code-agent-0.1.0.vsix
 
 ## 設定
 
-在 VS Code 設定中搜尋 `aiCodeAgent`，或於 `settings.json` 手動設定：
+在 VS Code 設定中搜尋 `ferrite`，或於 `settings.json` 手動設定：
 
 ```json
 {
-  "aiCodeAgent.provider": "deepseek",
-  "aiCodeAgent.apiKey": "sk-your-api-key-here",
-  "aiCodeAgent.model": "deepseek-chat",
-  "aiCodeAgent.endpoint": "https://api.deepseek.com",
-  "aiCodeAgent.temperature": 0.3,
-  "aiCodeAgent.timeoutSeconds": 120,
-  "aiCodeAgent.reasoning": false,
-  "aiCodeAgent.reasoningEffort": "high"
+  "ferrite.provider": "deepseek",
+  "ferrite.apiKey": "sk-your-api-key-here",
+  "ferrite.model": "deepseek-chat",
+  "ferrite.endpoint": "https://api.deepseek.com",
+  "ferrite.temperature": 0.3,
+  "ferrite.timeoutSeconds": 120,
+  "ferrite.reasoning": false,
+  "ferrite.reasoningEffort": "high"
 }
 ```
 
@@ -131,9 +133,9 @@ code --install-extension ai-code-agent-0.1.0.vsix
 
 ```json
 {
-  "aiCodeAgent.provider": "ollama",
-  "aiCodeAgent.model": "llama3",
-  "aiCodeAgent.endpoint": "http://localhost:11434/v1"
+  "ferrite.provider": "ollama",
+  "ferrite.model": "llama3",
+  "ferrite.endpoint": "http://localhost:11434/v1"
 }
 ```
 
@@ -186,7 +188,7 @@ code --install-extension ai-code-agent-0.1.0.vsix
 ## API Key 安全
 
 - API Key **永遠不會**儲存在專案原始碼中
-- Key 透過 VS Code 設定介面輸入，儲存在本機 VS Code 設定檔（不進 Git）
+- Key 透過 VS Code 設定介面輸入（`ferrite.apiKey`），儲存在本機 VS Code 設定檔（不進 Git）
 - 專案預設 `apiKey` 為空字串，無硬編碼金鑰
 
 ---

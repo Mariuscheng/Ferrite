@@ -1,11 +1,11 @@
 {
-  "name": "ai-code-agent",
-  "displayName": "AI Code Agent",
-  "description": "AI-powered coding assistant with support for DeepSeek, OpenAI, Anthropic, and Ollama",
+  "name": "ferrite",
+  "displayName": "Ferrite",
+  "description": "Rust-powered AI sidecar for VS Code — supports DeepSeek, OpenAI, Anthropic, and Ollama",
   "license": "MIT",
   "repository": { "type": "git", "url": "" },
   "version": "0.1.0",
-  "publisher": "ai-code-agent",
+  "publisher": "ferrite",
   "engines": {
     "vscode": "^1.125.0"
   },
@@ -16,43 +16,43 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "aiCodeAgent",
-          "title": "AI Code Agent",
-          "icon": "$(robot)"
-        }
-      ]
-    },
-    "views": {
-      "aiCodeAgent": [
-        {
-          "type": "webview",
-          "id": "aiCodeAgent.chatView",
-          "name": "對話",
-          "icon": "$(comment-discussion)"
-        }
-      ]
-    },
+      "viewsContainers": {
+        "activitybar": [
+          {
+            "id": "ferrite",
+            "title": "Ferrite",
+            "icon": "$(robot)"
+          }
+        ]
+      },
+      "views": {
+        "ferrite": [
+          {
+            "type": "webview",
+            "id": "ferrite.chatView",
+            "name": "對話",
+            "icon": "$(comment-discussion)"
+          }
+        ]
+      },
     "commands": [
       {
-        "command": "aiCodeAgent.openSettings",
-        "title": "AI Code Agent: 設定"
+        "command": "ferrite.openSettings",
+        "title": "Ferrite: 設定"
       },
       {
-        "command": "aiCodeAgent.newSession",
-        "title": "AI Code Agent: 新對話"
+        "command": "ferrite.newSession",
+        "title": "Ferrite: 新對話"
       },
       {
-        "command": "aiCodeAgent.clearSessions",
-        "title": "AI Code Agent: 清除所有對話"
+        "command": "ferrite.clearSessions",
+        "title": "Ferrite: 清除所有對話"
       }
     ],
     "configuration": {
-      "title": "AI Code Agent",
+      "title": "Ferrite",
       "properties": {
-        "aiCodeAgent.provider": {
+        "ferrite.provider": {
           "type": "string",
           "enum": [
             "deepseek",
@@ -63,41 +63,41 @@
           "default": "deepseek",
           "description": "AI 模型供應商 (Provider)"
         },
-        "aiCodeAgent.apiKey": {
+        "ferrite.apiKey": {
           "type": "string",
           "default": "",
           "description": "API 金鑰 (DeepSeek / OpenAI / Anthropic)"
         },
-        "aiCodeAgent.model": {
+        "ferrite.model": {
           "type": "string",
           "default": "deepseek-chat",
           "description": "模型名稱 (Model name)"
         },
-        "aiCodeAgent.endpoint": {
+        "ferrite.endpoint": {
           "type": "string",
           "default": "https://api.deepseek.com/",
           "description": "API Endpoint 網址"
         },
-        "aiCodeAgent.temperature": {
+        "ferrite.temperature": {
           "type": "number",
           "default": 0.3,
           "minimum": 0,
           "maximum": 2,
           "description": "AI 創造力溫度 (0-2)"
         },
-        "aiCodeAgent.timeoutSeconds": {
+        "ferrite.timeoutSeconds": {
           "type": "number",
           "default": 120,
           "minimum": 1,
           "maximum": 600,
           "description": "API 請求超時（秒）"
         },
-        "aiCodeAgent.reasoning": {
+        "ferrite.reasoning": {
           "type": "boolean",
           "default": false,
           "description": "啟用思考模式：AI 會先進行分析與計畫再回答"
         },
-        "aiCodeAgent.reasoningEffort": {
+        "ferrite.reasoningEffort": {
           "type": "string",
           "enum": ["low", "medium", "high", "xhigh"],
           "default": "high",

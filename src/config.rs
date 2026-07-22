@@ -58,7 +58,7 @@ impl Config {
     pub fn config_dir() -> PathBuf {
         dirs::config_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join("ai-code-agent")
+            .join("ferrite")
     }
 
     pub fn config_path(name: &str) -> PathBuf {

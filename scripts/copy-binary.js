@@ -5,7 +5,7 @@ const os = require('os');
 const projectRoot = path.resolve(__dirname, '..');
 const binDir = path.join(projectRoot, 'bin');
 const targetDir = path.join(projectRoot, 'target', 'release');
-const binaryName = os.platform() === 'win32' ? 'ai-agent.exe' : 'ai-agent';
+const binaryName = os.platform() === 'win32' ? 'ferrite-agent.exe' : 'ferrite-agent';
 const source = path.join(targetDir, binaryName);
 const dest = path.join(binDir, binaryName);
 
