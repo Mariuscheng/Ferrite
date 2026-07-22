@@ -1,0 +1,122 @@
+{
+  "name": "ai-code-agent",
+  "displayName": "AI Code Agent",
+  "description": "AI-powered coding assistant with support for DeepSeek, OpenAI, Anthropic, and Ollama",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "" },
+  "version": "0.1.0",
+  "publisher": "ai-code-agent",
+  "engines": {
+    "vscode": "^1.125.0"
+  },
+  "categories": [
+    "Machine Learning",
+    "Programming Languages",
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "aiCodeAgent",
+          "title": "AI Code Agent",
+          "icon": "$(robot)"
+        }
+      ]
+    },
+    "views": {
+      "aiCodeAgent": [
+        {
+          "type": "webview",
+          "id": "aiCodeAgent.chatView",
+          "name": "對話",
+          "icon": "$(comment-discussion)"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "aiCodeAgent.openSettings",
+        "title": "AI Code Agent: 設定"
+      },
+      {
+        "command": "aiCodeAgent.newSession",
+        "title": "AI Code Agent: 新對話"
+      },
+      {
+        "command": "aiCodeAgent.clearSessions",
+        "title": "AI Code Agent: 清除所有對話"
+      }
+    ],
+    "configuration": {
+      "title": "AI Code Agent",
+      "properties": {
+        "aiCodeAgent.provider": {
+          "type": "string",
+          "enum": [
+            "deepseek",
+            "openai",
+            "anthropic",
+            "ollama"
+          ],
+          "default": "deepseek",
+          "description": "AI 模型供應商 (Provider)"
+        },
+        "aiCodeAgent.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API 金鑰 (DeepSeek / OpenAI / Anthropic)"
+        },
+        "aiCodeAgent.model": {
+          "type": "string",
+          "default": "deepseek-chat",
+          "description": "模型名稱 (Model name)"
+        },
+        "aiCodeAgent.endpoint": {
+          "type": "string",
+          "default": "https://api.deepseek.com/",
+          "description": "API Endpoint 網址"
+        },
+        "aiCodeAgent.temperature": {
+          "type": "number",
+          "default": 0.3,
+          "minimum": 0,
+          "maximum": 2,
+          "description": "AI 創造力溫度 (0-2)"
+        },
+        "aiCodeAgent.timeoutSeconds": {
+          "type": "number",
+          "default": 120,
+          "minimum": 1,
+          "maximum": 600,
+          "description": "API 請求超時（秒）"
+        },
+        "aiCodeAgent.reasoning": {
+          "type": "boolean",
+          "default": false,
+          "description": "啟用思考模式：AI 會先進行分析與計畫再回答"
+        },
+        "aiCodeAgent.reasoningEffort": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "xhigh"],
+          "default": "high",
+          "description": "思考模式深度 (Reasoning effort)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile && node scripts/copy-binary.js",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package",
+    "build": "npm run compile && node scripts/copy-binary.js && vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "@types/vscode": "^1.125.0",
+    "@vscode/vsce": "^3.9.2",
+    "typescript": "^7.0.2"
+  }
+}
