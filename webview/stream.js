@@ -10,6 +10,10 @@ var sT = document.getElementById('sTxt');
 var streamBuffer = '';
 var streamContentEl = null;
 
+// ── Progressive Markdown Throttle ──────────────────────────────────────
+var streamRenderTimer = null;
+var STREAM_RENDER_INTERVAL = 80; // ms
+
 function renderStreamChunk(chunk) {
     if (!chunk) { return; }
     if (chunk.content) {
@@ -24,10 +28,9 @@ function renderStreamChunk(chunk) {
             var copyBtn = makeNode('button', 'msg-action-btn', '📋');
             copyBtn.title = '複製整則訊息';
             (function () {
-                var ct = streamBuffer;
                 copyBtn.onclick = function (e) {
                     e.stopPropagation();
-                    navigator.clipboard.writeText(ct).then(function () {
+                    navigator.clipboard.writeText(streamBuffer).then(function () {
                         showToast('已複製到剪貼簿', 'success', 1800);
                     }).catch(function () {
                         showToast('複製失敗', 'error', 2000);
@@ -41,10 +44,22 @@ function renderStreamChunk(chunk) {
             div.appendChild(streamContentEl);
             mc.insertBefore(div, li);
         }
-        streamContentEl.textContent = streamBuffer;
-        mc.scrollTop = mc.scrollHeight;
+        // Progressive markdown rendering: throttle re-renders to avoid
+        // excessive DOM work while streaming.
+        if (streamRenderTimer) { clearTimeout(streamRenderTimer); }
+        var buf = streamBuffer;
+        var el = streamContentEl;
+        (function (buffer, target) {
+            streamRenderTimer = setTimeout(function () {
+                streamRenderTimer = null;
+                clearNode(target);
+                renderMarkdown(target, buffer);
+                mc.scrollTop = mc.scrollHeight;
+            }, STREAM_RENDER_INTERVAL);
+        })(buf, el);
     }
     if (chunk.done) {
+        if (streamRenderTimer) { clearTimeout(streamRenderTimer); streamRenderTimer = null; }
         if (streamContentEl) {
             clearNode(streamContentEl);
             renderMarkdown(streamContentEl, streamBuffer);

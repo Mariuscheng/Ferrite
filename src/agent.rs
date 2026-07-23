@@ -540,7 +540,8 @@ impl CodingAgent {
     // ── Message History ─────────────────────────────────────────────────────
 
     pub fn get_session_messages(&self, id: &str) -> Vec<ChatMessage> {
-        self.get_session(id)
+        let messages: Vec<ChatMessage> = self
+            .get_session(id)
             .map(|s| {
                 s.messages
                     .iter()
@@ -568,7 +569,23 @@ impl CodingAgent {
                     .cloned()
                     .collect()
             })
-            .unwrap_or_default()
+            .unwrap_or_default();
+
+        // Merge consecutive messages of the same role so that a single
+        // assistant turn (which may span multiple internal messages due to
+        // tool-call iterations) appears as one coherent response bubble.
+        let mut merged: Vec<ChatMessage> = Vec::new();
+        for msg in messages {
+            if let Some(last) = merged.last_mut() {
+                if last.role == msg.role {
+                    last.content.push('\n');
+                    last.content.push_str(&msg.content);
+                    continue;
+                }
+            }
+            merged.push(msg);
+        }
+        merged
     }
 
     // ── IDE Context ─────────────────────────────────────────────────────────
