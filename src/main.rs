@@ -1,20 +1,10 @@
-mod agent;
-mod config;
-mod context;
-mod edit_plan;
-mod providers;
-mod rpc;
-mod session;
-mod tool_parser;
-mod tools;
-
 use std::io::{self, BufRead, Write};
 use std::sync::{Arc, Mutex as StdMutex};
 
 use anyhow::Result;
-use config::Config;
-use rpc::{JsonRpcRequest, JsonRpcResponse, RpcHandler, StreamChunkSink};
-use tools::ToolEventSink;
+use ferrite::config::Config;
+use ferrite::rpc::{JsonRpcRequest, JsonRpcResponse, RpcHandler, StreamChunkSink};
+use ferrite::tools::ToolEventSink;
 use tokio::sync::Mutex as AsyncMutex;
 use tracing_subscriber::EnvFilter;
 

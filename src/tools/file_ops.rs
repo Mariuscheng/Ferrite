@@ -162,7 +162,7 @@ pub async fn tool_replace_in_file(args: Value, workspace_root: &str) -> ToolResu
                              Search text preview (first 200 chars): {}",
                             i + 1,
                             path,
-                            &search[..search.len().min(200)]
+                            &search.chars().take(200).collect::<String>()
                         )),
                     };
                 }
