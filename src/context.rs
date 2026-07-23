@@ -156,6 +156,18 @@ pub fn build_project_context(workspace_root: &str) -> String {
     ctx.push_str(&entries.join("\n"));
     ctx.push_str("\n```\n\n");
 
+    // Inject OS / shell info so the AI uses appropriate commands.
+    let os_name = std::env::consts::OS;
+    let shell_desc = if cfg!(target_os = "windows") {
+        "cmd.exe ( `cmd /C {cmd}` ) — use Windows commands (e.g., `dir`, `mkdir`, `echo hello`, `cargo build`)"
+    } else {
+        "bash / sh ( `sh -c {cmd}` ) — use Unix commands (e.g., `ls`, `mkdir -p`, `echo hello`, `cargo build`)"
+    };
+    ctx.push_str("### 🖥️ 作業系統與 Shell 環境 (OS & Shell Environment)\n");
+    ctx.push_str(&format!("**作業系統:** {}  |  **Shell:** {}\n\n", os_name, shell_desc));
+    ctx.push_str(
+        "**⚠️ 重要：** `execute_command` 會透過上述 Shell 執行命令。\n",
+    );
     ctx.push_str(
         "**AI 提示:** 使用 `list_files` 工具並設置 `recursive: true` 來探索更深層的結構。使用 `read_file` 來檢查檔案內容。\n",
     );

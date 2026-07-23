@@ -12,6 +12,14 @@ pub struct ToolRegistry {
 
 impl ToolRegistry {
     pub fn new() -> Self {
+        let execute_desc = if cfg!(target_os = "windows") {
+            "Execute a shell command via `cmd.exe` and return the output. \
+             Use Windows commands (e.g., `echo hello`, `dir`, `mkdir`, `cargo build`). \
+             Do NOT use Unix shells — the environment is `cmd /C {cmd}`.".to_string()
+        } else {
+            "Execute a shell command via `sh` and return the output.".to_string()
+        };
+
         let tools = vec![
             ToolDefinition {
                 name: "read_file".into(),
@@ -135,8 +143,7 @@ without sending the entire file.".into(),
             },
             ToolDefinition {
                 name: "execute_command".into(),
-                description: "Execute a shell command in the workspace and return the output."
-                    .into(),
+                description: execute_desc,
                 parameters: serde_json::json!({
                     "type": "object",
                     "properties": {
