@@ -209,6 +209,64 @@ without sending the entire file.".into(),
                     "required": ["command"]
                 }),
             },
+            ToolDefinition {
+                name: "apply_diff".into(),
+                description: "Apply a unified diff patch to workspace files. \
+Supports dry-run preview mode to review changes before applying, \
+fuzz matching for tolerance against whitespace/line-shift differences, \
+and automatic backup of original files. \
+\n\n**Input:** A unified diff string (like `git diff` output) in the `patch` parameter. \
+Set `dry_run: true` to preview without modifying files; set `dry_run: false` to actually apply. \
+Use `fuzz` (default 3) to control how many lines of context mismatch are tolerated.".into(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "patch": {
+                            "type": "string",
+                            "description": "The unified diff / patch content to apply (like output from `git diff`)"
+                        },
+                        "dry_run": {
+                            "type": "boolean",
+                            "description": "If true, preview the changes without modifying files. Default: false"
+                        },
+                        "fuzz": {
+                            "type": "integer",
+                            "description": "Number of lines of context mismatch tolerance. Default: 3"
+                        }
+                    },
+                    "required": ["patch"]
+                }),
+            },
+            ToolDefinition {
+                name: "list_diff".into(),
+                description: "List all files that have been modified by the agent \
+via apply_diff (detected by the presence of a `.ferrite-bak` backup snapshot). \
+Use this to review what changes have already been applied in the session \
+before making further edits, avoiding duplicate or conflicting modifications.".into(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }),
+            },
+            ToolDefinition {
+                name: "get_file_diff".into(),
+                description: "Get the current unified diff for a single file by comparing \
+its `.ferrite-bak` snapshot (state before the agent's apply_diff edits) with the current \
+on-disk content. Use this to review what exactly was changed in a file.\
+\n\n**Input:** `path` — the file path relative to the workspace root. \
+Returns the unified diff string (same format as `git diff`).".into(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "The file path relative to the workspace root"
+                        }
+                    },
+                    "required": ["path"]
+                }),
+            },
         ];
 
         let shell_template = if cfg!(target_os = "windows") {
@@ -394,6 +452,15 @@ without sending the entire file.".into(),
                     workspace_root,
                 )
                 .await
+            }
+            ToolName::ApplyDiff => {
+                crate::tools::diff_ops::tool_apply_diff(args, workspace_root).await
+            }
+            ToolName::ListDiff => {
+                crate::tools::diff_ops::tool_list_diff(args, workspace_root).await
+            }
+            ToolName::GetFileDiff => {
+                crate::tools::diff_ops::tool_get_file_diff(args, workspace_root).await
             }
         }
     }

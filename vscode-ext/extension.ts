@@ -2,13 +2,16 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as os from 'os';
 import { SidecarManager } from './sidecar';
-import { ChatViewProvider } from './chatView';
+import { ChatViewProvider, registerDiffContentProvider } from './chatView';
 
 let sidecarManager: SidecarManager | undefined;
 let chatViewProvider: ChatViewProvider | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Ferrite extension activated');
+
+    // Register the in-memory diff content provider for the native diff editor.
+    registerDiffContentProvider(context);
 
     // Initialize the sidecar manager
     const binaryName = os.platform() === 'win32' ? 'ferrite-agent.exe' : 'ferrite-agent';

@@ -2,6 +2,7 @@
 
 var slist, nsb;
 var sp, sBtn;
+var ap, aBtn;
 var wp, wBtn;
 var wStatus, wLabel;
 var cP, cK, cE, cM;
@@ -12,6 +13,9 @@ var cShell, cfgMT;
 var svB, svM;
 var keySt;
 var imgBtn, imgInput;
+var agEdit, agRead, agList, agSearch, agWrite;
+var agExec, agValidate, agPlan;
+var agAuto, agRetry, agDiff;
 
 var v = acquireVsCodeApi();
 var modelLists = MODEL_LISTS;
@@ -27,6 +31,8 @@ function toggleSettingsPanel() {
     if (opened) {
         if (wp) { wp.classList.remove('show'); }
         if (wBtn) { wBtn.classList.remove('active'); }
+        if (ap) { ap.classList.remove('show'); }
+        if (aBtn) { aBtn.classList.remove('active'); }
         sBtn.classList.add('active');
         v.postMessage({ type: 'getConfig' });
     } else {
@@ -40,10 +46,42 @@ function toggleWorkPanel() {
     if (opened) {
         if (sp) { sp.classList.remove('show'); }
         if (sBtn) { sBtn.classList.remove('active'); }
+        if (ap) { ap.classList.remove('show'); }
+        if (aBtn) { aBtn.classList.remove('active'); }
         wBtn.classList.add('active');
     } else {
         wBtn.classList.remove('active');
     }
+}
+
+function toggleAgentPanel() {
+    if (!ap || !aBtn) { console.error('agent panel/button missing'); return; }
+    var opened = ap.classList.toggle('show');
+    if (opened) {
+        if (sp) { sp.classList.remove('show'); }
+        if (sBtn) { sBtn.classList.remove('active'); }
+        if (wp) { wp.classList.remove('show'); }
+        if (wBtn) { wBtn.classList.remove('active'); }
+        aBtn.classList.add('active');
+    } else {
+        aBtn.classList.remove('active');
+    }
+}
+
+function getAgentConfig() {
+    return {
+        editFiles: agEdit ? agEdit.checked : true,
+        readFiles: agRead ? agRead.checked : true,
+        listFiles: agList ? agList.checked : true,
+        searchFiles: agSearch ? agSearch.checked : true,
+        writeFiles: agWrite ? agWrite.checked : true,
+        executeCommands: agExec ? agExec.checked : true,
+        validateResult: agValidate ? agValidate.checked : true,
+        generatePlan: agPlan ? agPlan.checked : true,
+        autoApprove: agAuto ? agAuto.checked : true,
+        autoRetry: agRetry ? agRetry.checked : false,
+        diffPreview: agDiff ? agDiff.checked : true,
+    };
 }
 
 // ── Model Dropdown ──────────────────────────────────────────────────────

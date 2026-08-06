@@ -81,8 +81,8 @@ body{font-family:var(--vscode-font-family,sans-serif);font-size:var(--vscode-fon
 .welcome-chip{background:var(--vscode-input-background);border:1px solid var(--vscode-panel-border);color:var(--vscode-foreground);padding:8px 14px;border-radius:var(--br-pill);cursor:pointer;font-size:11px;transition:all var(--trans-fast);white-space:nowrap;}
 .welcome-chip:hover{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border-color:var(--vscode-button-background);transform:translateY(-2px);box-shadow:var(--sh-md);}
 .welcome-chip:active{transform:translateY(0);}
-.settings-panel,.work-panel{max-height:0;opacity:0;overflow:hidden;padding-top:0;padding-bottom:0;border-bottom:1px solid transparent;background:color-mix(in srgb,var(--vscode-editor-background) 85%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);transition:max-height var(--trans-slow),opacity var(--trans-normal),padding var(--trans-slow),border-bottom-color var(--trans-slow);}
-.settings-panel.show,.work-panel.show{max-height:480px;opacity:1;padding:var(--sp-lg) var(--sp-md);border-bottom-color:var(--vscode-sideBar-border);overflow-y:auto;}
+.settings-panel,.work-panel,.agent-panel{max-height:0;opacity:0;overflow:hidden;padding-top:0;padding-bottom:0;border-bottom:1px solid transparent;background:color-mix(in srgb,var(--vscode-editor-background) 85%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);transition:max-height var(--trans-slow),opacity var(--trans-normal),padding var(--trans-slow),border-bottom-color var(--trans-slow);}
+.settings-panel.show,.work-panel.show,.agent-panel.show{max-height:480px;opacity:1;padding:var(--sp-lg) var(--sp-md);border-bottom-color:var(--vscode-sideBar-border);overflow-y:auto;}
 .panel-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--sp-md);margin-bottom:12px;}
 .panel-heading h3{font-size:13px;font-weight:650;}
 .panel-heading p{margin-top:3px;color:var(--vscode-descriptionForeground);font-size:10px;}
@@ -175,6 +175,44 @@ body{font-family:var(--vscode-font-family,sans-serif);font-size:var(--vscode-fon
 /* Animations & Reduced Motion */
 @keyframes msgIn{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
 @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+/* ── Diff Viewer ─────────────────────────────────────────────────── */
+.diff-viewer{margin-top:var(--sp-sm);background:var(--vscode-editor-background);border:1px solid var(--vscode-panel-border);border-radius:var(--br-md);overflow:hidden;max-height:420px;overflow-y:auto;display:flex;flex-direction:column;}
+.diff-viewer-header{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-sm);padding:8px 12px;border-bottom:1px solid var(--vscode-panel-border);background:var(--vscode-sideBar-background);}
+.diff-summary{font-size:11px;font-weight:600;color:var(--vscode-foreground);}
+.diff-controls{display:flex;gap:var(--sp-xs);}
+.diff-file-label{display:flex;align-items:center;gap:var(--sp-xs);padding:7px 12px;font-size:11px;font-weight:600;border-bottom:1px solid var(--vscode-panel-border);background:color-mix(in srgb,var(--vscode-sideBar-background) 50%,transparent);color:var(--vscode-foreground);}
+.diff-file-path{font-family:var(--vscode-editor-font-family,monospace);font-size:11px;}
+.diff-status{font-size:10px;padding:2px 8px;border-radius:var(--br-pill);margin-left:auto;}
+.diff-status:empty{display:none;}
+.diff-status:not(.diff-status-warn){background:#4caf5025;color:#4caf50;}
+.diff-status.diff-status-warn{background:#ff980025;color:#ff9800;}
+.diff-hunk{margin:0;border-bottom:1px solid var(--vscode-panel-border);}
+.diff-hunk:last-child{border-bottom:none;}
+.diff-hunk-failed{opacity:.65;}
+.diff-hunk-selected{border-left:3px solid var(--vscode-button-background);}
+.diff-hunk-rejected{border-left:3px solid var(--vscode-inputValidation-errorBorder);opacity:.45;}
+.diff-hunk-rejected .diff-hunk-lines{text-decoration:line-through;}
+.diff-hunk-header{display:flex;align-items:center;justify-content:space-between;padding:5px 10px;background:var(--vscode-textCodeBlock-background);font-family:var(--vscode-editor-font-family,monospace);font-size:10px;color:var(--vscode-descriptionForeground);}
+.diff-hunk-error{color:var(--vscode-inputValidation-errorForeground);margin-left:var(--sp-sm);font-weight:600;}
+.diff-hunk-actions{display:flex;gap:2px;}
+.diff-hunk-lines{padding:0;overflow-x:auto;}
+.diff-lines-table{width:100%;border-collapse:collapse;table-layout:fixed;}
+.diff-lines-table td{width:50%;padding:1px 8px;font-family:var(--vscode-editor-font-family,monospace);font-size:10px;line-height:1.6;white-space:pre-wrap;word-break:break-all;vertical-align:top;}
+.diff-added{background:#4caf5015;}
+.diff-removed{background:#f4433615;}
+.diff-line-sign{display:inline-block;width:14px;font-weight:700;text-align:center;margin-right:4px;user-select:none;}
+.diff-added .diff-line-sign{color:#4caf50;}
+.diff-removed .diff-line-sign{color:#f44336;}
+.diff-line-text{vertical-align:top;}
+.diff-empty{background:transparent;}
+.diff-btn{padding:3px 9px;border:1px solid var(--vscode-panel-border);border-radius:var(--br-sm);font-size:10px;cursor:pointer;background:var(--vscode-input-background);color:var(--vscode-foreground);transition:all var(--trans-fast);}
+.diff-btn:hover{background:var(--vscode-toolbar-hoverBackground);border-color:var(--vscode-focusBorder);}
+.diff-btn-apply{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border-color:var(--vscode-button-background);font-weight:600;}
+.diff-btn-apply:hover{background:var(--vscode-button-hoverBackground);}
+.diff-btn-cancel{color:var(--vscode-descriptionForeground);}
+.diff-btn-accept,.diff-btn-reject{min-width:24px;height:22px;display:flex;align-items:center;justify-content:center;font-size:12px;padding:0;}
+.diff-btn-accept:hover{background:#4caf5025;color:#4caf50;border-color:#4caf50;}
+.diff-btn-reject:hover{background:#f4433625;color:#f44336;border-color:#f44336;}
 @media (prefers-reduced-motion:reduce){
     *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;}
     .message{animation:none;}

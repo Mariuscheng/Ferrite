@@ -20,6 +20,69 @@ pub fn map_reasoning_effort(effort: &str) -> String {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn map_reasoning_effort_low_and_medium_map_to_high() {
+        assert_eq!(map_reasoning_effort("low"), "high");
+        assert_eq!(map_reasoning_effort("medium"), "high");
+        assert_eq!(map_reasoning_effort("LOW"), "high");
+    }
+
+    #[test]
+    fn map_reasoning_effort_xhigh_maps_to_max() {
+        assert_eq!(map_reasoning_effort("xhigh"), "max");
+        assert_eq!(map_reasoning_effort("XHIGH"), "max");
+    }
+
+    #[test]
+    fn map_reasoning_effort_passes_through_other_values() {
+        assert_eq!(map_reasoning_effort("high"), "high");
+        assert_eq!(map_reasoning_effort("max"), "max");
+        assert_eq!(map_reasoning_effort(""), "");
+    }
+
+    #[test]
+    fn jsonrpc_success_response_shape() {
+        let resp = JsonRpcResponse::success(
+            Some(serde_json::json!(1)),
+            serde_json::json!({"status": "ok"}),
+        );
+        let value = serde_json::to_value(&resp).expect("serialize");
+        assert_eq!(value["jsonrpc"], "2.0");
+        assert_eq!(value["id"], 1);
+        assert_eq!(value["result"]["status"], "ok");
+        assert!(value.get("error").is_none());
+    }
+
+    #[test]
+    fn jsonrpc_error_response_shape() {
+        let resp = JsonRpcResponse::error(
+            Some(serde_json::json!(2)),
+            -32602,
+            "Missing required param: message".to_string(),
+        );
+        let value = serde_json::to_value(&resp).expect("serialize");
+        assert_eq!(value["jsonrpc"], "2.0");
+        assert_eq!(value["id"], 2);
+        assert_eq!(value["error"]["code"], -32602);
+        assert_eq!(value["error"]["message"], "Missing required param: message");
+        assert!(value.get("result").is_none());
+    }
+
+    #[test]
+    fn jsonrpc_request_parses_default_params() {
+        let request: JsonRpcRequest = serde_json::from_str(
+            r#"{"id": 3, "method": "getStatus"}"#,
+        )
+        .expect("parse");
+        assert_eq!(request.method, "getStatus");
+        assert_eq!(request.params, Value::Null);
+    }
+}
+
 /// JSON-RPC 2.0 request
 #[derive(Debug, Deserialize)]
 pub struct JsonRpcRequest {
@@ -154,6 +217,8 @@ fn chat_response_json(
 pub struct RpcHandler {
     agent: CodingAgent,
     stream_sink: Option<StreamChunkSink>,
+    cancel_tx: tokio::sync::watch::Sender<bool>,
+    cancel_rx: Option<tokio::sync::watch::Receiver<bool>>,
 }
 
 impl RpcHandler {
@@ -162,9 +227,12 @@ impl RpcHandler {
         tool_event_sink: ToolEventSink,
         stream_sink: StreamChunkSink,
     ) -> anyhow::Result<Self> {
+        let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
         Ok(Self {
             agent: CodingAgent::new_with_event_sink(config, Some(tool_event_sink))?,
             stream_sink: Some(stream_sink),
+            cancel_tx,
+            cancel_rx: Some(cancel_rx),
         })
     }
 
@@ -208,7 +276,21 @@ impl RpcHandler {
                     }
                 };
 
-                match self.agent.chat_stream(&effective, &user_message, sink).await {
+                let cancel_rx = self.cancel_rx.take().unwrap_or_else(|| {
+                    let (_, rx) = tokio::sync::watch::channel(false);
+                    rx
+                });
+
+                let result = self.agent.chat_stream_with_cancel(
+                    &effective, &user_message, sink, cancel_rx,
+                ).await;
+
+                // Reset cancel channel for next request
+                let (new_tx, new_rx) = tokio::sync::watch::channel(false);
+                self.cancel_tx = new_tx;
+                self.cancel_rx = Some(new_rx);
+
+                match result {
                     Ok(resp) => JsonRpcResponse::success(
                         req.id,
                         chat_response_json(
@@ -248,6 +330,16 @@ impl RpcHandler {
                     ),
                     Err(e) => JsonRpcResponse::error(req.id, -32000, format!("Agent error: {}", e)),
                 }
+            }
+
+            "stopGeneration" => {
+                // Signal the cancel channel to abort the in-flight chatStream loop.
+                let _ = self.cancel_tx.send(true);
+                tracing::info!("Cancellation signal sent to chat loop");
+                JsonRpcResponse::success(
+                    req.id,
+                    serde_json::json!({"status": "stopRequested"}),
+                )
             }
 
             "updateIdeContext" => {
@@ -442,6 +534,91 @@ impl RpcHandler {
                     req.id,
                     serde_json::json!({ "sessionId": session_id, "saved": saved }),
                 )
+            }
+
+            "applyDiff" => {
+                let workspace_root = workspace_root(&req.params);
+                let patch = match require_string_param(&req.id, &req.params, "patch") {
+                    Ok(p) => p,
+                    Err(e) => return *e,
+                };
+                let dry_run = req.params["dryRun"].as_bool().unwrap_or(false);
+                let fuzz = req.params["fuzz"].as_u64().unwrap_or(3);
+
+                let result = crate::tools::diff_ops::tool_apply_diff(
+                    serde_json::json!({
+                        "patch": patch,
+                        "dry_run": dry_run,
+                        "fuzz": fuzz,
+                    }),
+                    &workspace_root,
+                )
+                .await;
+
+                if result.success {
+                    // Try to parse the content as JSON for nice structured output
+                    if let Ok(v) = serde_json::from_str::<Value>(&result.content) {
+                        JsonRpcResponse::success(req.id, v)
+                    } else {
+                        JsonRpcResponse::success(req.id, serde_json::json!({ "result": result.content }))
+                    }
+                } else {
+                    JsonRpcResponse::error(
+                        req.id,
+                        -32000,
+                        result.error.unwrap_or_else(|| "applyDiff failed".into()),
+                    )
+                }
+            }
+
+            "listDiff" => {
+                let workspace_root = workspace_root(&req.params);
+                let result = crate::tools::diff_ops::tool_list_diff(
+                    Value::Null,
+                    &workspace_root,
+                )
+                .await;
+
+                if result.success {
+                    if let Ok(v) = serde_json::from_str::<Value>(&result.content) {
+                        JsonRpcResponse::success(req.id, v)
+                    } else {
+                        JsonRpcResponse::success(req.id, serde_json::json!({ "files": [] }))
+                    }
+                } else {
+                    JsonRpcResponse::error(
+                        req.id,
+                        -32000,
+                        result.error.unwrap_or_else(|| "listDiff failed".into()),
+                    )
+                }
+            }
+
+            "getFileDiff" => {
+                let workspace_root = workspace_root(&req.params);
+                let path = match require_string_param(&req.id, &req.params, "path") {
+                    Ok(p) => p,
+                    Err(e) => return *e,
+                };
+                let result = crate::tools::diff_ops::tool_get_file_diff(
+                    serde_json::json!({ "path": path }),
+                    &workspace_root,
+                )
+                .await;
+
+                if result.success {
+                    if let Ok(v) = serde_json::from_str::<Value>(&result.content) {
+                        JsonRpcResponse::success(req.id, v)
+                    } else {
+                        JsonRpcResponse::success(req.id, serde_json::json!({ "path": path, "patch": "" }))
+                    }
+                } else {
+                    JsonRpcResponse::error(
+                        req.id,
+                        -32000,
+                        result.error.unwrap_or_else(|| "getFileDiff failed".into()),
+                    )
+                }
             }
 
             "shutdown" => {

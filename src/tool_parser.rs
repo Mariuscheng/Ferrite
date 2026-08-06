@@ -56,9 +56,13 @@ pub fn extract_tool_calls_from(
         }
     }
 
-    // Strategy 4: Manual XML tool call parser
+    // Strategy 4: Manual XML tool call parser.
+    // Strip markdown code fences first to avoid matching example XML
+    // that the AI may show inside a code block for demonstration.
     if tools.is_empty() {
-        let xml_tools = parse_xml_tool_calls_manual(haystack, tool_definitions);
+        let dedented = strip_markdown_code_fences(haystack);
+        let haystack_for_xml = dedented.as_deref().unwrap_or(haystack);
+        let xml_tools = parse_xml_tool_calls_manual(haystack_for_xml, tool_definitions);
         tools.extend(xml_tools);
     }
 
@@ -209,6 +213,20 @@ pub fn extract_xml_params_manual(inner: &str) -> serde_json::Value {
     }
 
     serde_json::Value::Object(map)
+}
+
+/// Remove content inside markdown code fences (triple-backtick blocks).
+/// Returns `Some(stripped)` when at least one fence pair was found,
+/// or `None` when no code fences were present (caller should use the
+/// original content unchanged).
+pub fn strip_markdown_code_fences(content: &str) -> Option<String> {
+    if let Ok(re) = regex_lite::Regex::new(r"(?s)```[^\n]*\n[\s\S]*?```") {
+        let result = re.replace_all(content, "").into_owned();
+        if result.len() < content.len() {
+            return Some(result);
+        }
+    }
+    None
 }
 
 /// Strip outer `<tool_call>` or `<tool_calls>` wrapper tags to expose inner tool tags.

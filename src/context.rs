@@ -14,13 +14,21 @@ pub fn get_system_prompt() -> &'static str {
 - 確認當前的確切程式碼（包含縮排、空行）
 - 然後使用 `replace_in_file` 進行精確的目標編輯
 
-### 2. 使用 replace_in_file（優先）
+### 2. 使用 replace_in_file（優先用於小修改）
 - **單一修改:** 提供 `path`、`search`（要替換的原始碼）、`replace`（新程式碼）
 - **多處修改:** 使用 `diff` 陣列參數，一次傳入多組 {search, replace} 物件
   - AI 會在單次呼叫中依序套用所有修改
   - 這是最有效率的做法：避免多次讀寫同一個檔案
 - `search` 必須與檔案中的原始碼完全一致（包含縮排、換行）
 - 如果 search 找不到，AI 會告訴你哪一個區塊失敗並顯示前 200 字元供除錯
+
+### 2b. 使用 apply_diff（大規模/跨檔案修改）
+當你需要進行大量、跨多個檔案的修改時，使用 `apply_diff` 工具：
+- 產出標準 unified diff 格式（如同 `git diff` 輸出），一次對多個檔案進行變更
+- **務必先使用 `dry_run: true` 進行預覽**，確認所有 hunk 都能成功匹配後再正式套用
+- 設定 `fuzz` 參數（預設 3）來容忍上下文位移
+- apply_diff 會自動建立備份檔（`.ferrite-bak`），以便復原
+- **流程：** 先閱讀檔案 → 產生 unified diff → dry_run 預覽 → 確認後 dry_run: false 套用
 
 ### 3. 新建檔案使用 write_file
 - 只有在建立全新檔案時才使用
@@ -142,7 +150,7 @@ pub fn build_project_context(workspace_root: &str) -> String {
 
     // Build file tree (top 3 levels, max 200 entries)
     let mut entries: Vec<String> = Vec::new();
-    collect_file_tree(root, root, 0, 3, &mut entries);
+    collect_file_tree(root, 0, 3, &mut entries);
     if entries.len() > 200 {
         let remaining = entries.len() - 200;
         entries.truncate(200);
@@ -176,7 +184,6 @@ pub fn build_project_context(workspace_root: &str) -> String {
 
 /// Recursively collect file tree entries.
 pub fn collect_file_tree(
-    _base: &std::path::Path,
     dir: &std::path::Path,
     depth: usize,
     max_depth: usize,
@@ -221,7 +228,7 @@ pub fn collect_file_tree(
 
             if path.is_dir() {
                 entries.push(format!("{}📁 {}/", indent, name_str));
-                collect_file_tree(_base, &path, depth + 1, max_depth, entries);
+                collect_file_tree(&path, depth + 1, max_depth, entries);
             } else {
                 let size_str = if let Ok(meta) = path.metadata() {
                     let s = meta.len();

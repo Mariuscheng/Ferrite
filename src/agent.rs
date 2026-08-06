@@ -87,6 +87,9 @@ impl CodingAgent {
         }
     }
 
+    /// Max age for a session file before it is considered stale (7 days).
+    const SESSION_TTL_SECS: u64 = 7 * 24 * 3600;
+
     fn load_sessions(&mut self) {
         let dir = Self::sessions_dir();
         if !dir.exists() {
@@ -99,21 +102,52 @@ impl CodingAgent {
                 return;
             }
         };
+
+        let now = std::time::SystemTime::now();
+        let mut stale_paths: Vec<std::path::PathBuf> = Vec::new();
+
         for entry in entries.flatten() {
             let path = entry.path();
             if path.extension().map(|e| e != "json").unwrap_or(true) {
                 continue;
             }
+
+            // Purge sessions older than SESSION_TTL_SECS
+            if let Ok(metadata) = std::fs::metadata(&path) {
+                if let Ok(modified) = metadata.modified() {
+                    if let Ok(age) = now.duration_since(modified) {
+                        if age.as_secs() > Self::SESSION_TTL_SECS {
+                            stale_paths.push(path.clone());
+                            continue;
+                        }
+                    }
+                }
+            }
+
             match std::fs::read_to_string(&path) {
                 Ok(content) => match serde_json::from_str::<SessionSnapshot>(&content) {
                     Ok(snapshot) => {
                         self.sessions.insert(snapshot.id.clone(), snapshot.into_session());
                     }
-                    Err(e) => tracing::warn!("Failed to parse session file {:?}: {}", path, e),
+                    Err(e) => {
+                        tracing::warn!("Failed to parse session file {:?}: {}", path, e);
+                        stale_paths.push(path.clone());
+                    }
                 },
                 Err(e) => tracing::warn!("Failed to read session file {:?}: {}", path, e),
             }
         }
+
+        // Remove stale session files
+        for path in &stale_paths {
+            if let Err(e) = std::fs::remove_file(path) {
+                tracing::warn!("Failed to remove stale session {:?}: {}", path, e);
+            }
+        }
+        if !stale_paths.is_empty() {
+            tracing::info!("Purged {} stale session files", stale_paths.len());
+        }
+
         if !self.sessions.is_empty() {
             tracing::info!("Loaded {} sessions from disk", self.sessions.len());
         }
@@ -215,6 +249,13 @@ impl CodingAgent {
                 Ok(t) => t,
                 Err(e) => {
                     tracing::warn!("Unknown native tool '{}': {}", tool_name, e);
+                    let error_output = format!(
+                        "Error: Unknown tool '{}'. Available: read_file, write_file, replace_in_file, search_files, list_files, execute_command, create_project, compile, run_tests, apply_diff, list_diff, get_file_diff.",
+                        tool_name
+                    );
+                    if let Some(session) = self.sessions.get_mut(session_id) {
+                        session.add_native_tool_result(&tool_call.id, &error_output);
+                    }
                     continue;
                 }
             };
@@ -271,6 +312,13 @@ impl CodingAgent {
                 Ok(t) => t,
                 Err(e) => {
                     tracing::warn!("Unknown XML tool '{}': {}", tc.name, e);
+                    let error_msg = format!(
+                        "Error: Unknown tool '{}'. Available: read_file, write_file, replace_in_file, search_files, list_files, execute_command, create_project, compile, run_tests, apply_diff, list_diff, get_file_diff.",
+                        tc.name
+                    );
+                    if let Some(session) = self.sessions.get_mut(session_id) {
+                        session.add_tool_msg(&tc.name, &error_msg);
+                    }
                     continue;
                 }
             };
@@ -310,7 +358,18 @@ impl CodingAgent {
         user_message: &str,
         sink: StreamChunkSink,
     ) -> Result<AgentResponse> {
-        self.chat_impl(session_id, user_message, Some(sink), true)
+        self.chat_impl(session_id, user_message, Some(sink), true, None)
+            .await
+    }
+
+    pub async fn chat_stream_with_cancel(
+        &mut self,
+        session_id: &str,
+        user_message: &str,
+        sink: StreamChunkSink,
+        cancel_rx: tokio::sync::watch::Receiver<bool>,
+    ) -> Result<AgentResponse> {
+        self.chat_impl(session_id, user_message, Some(sink), true, Some(cancel_rx))
             .await
     }
 
@@ -319,7 +378,7 @@ impl CodingAgent {
         session_id: &str,
         user_message: &str,
     ) -> Result<AgentResponse> {
-        self.chat_impl(session_id, user_message, None, false).await
+        self.chat_impl(session_id, user_message, None, false, None).await
     }
 
     async fn chat_impl(
@@ -328,22 +387,17 @@ impl CodingAgent {
         user_message: &str,
         sink: Option<StreamChunkSink>,
         stream_mode: bool,
+        cancel_rx: Option<tokio::sync::watch::Receiver<bool>>,
     ) -> Result<AgentResponse> {
-        if !self.sessions.contains_key(session_id) {
-            anyhow::bail!("Session {} not found", session_id);
-        }
-
-        {
-            let session = self.sessions.get_mut(session_id).unwrap();
-            session.add_user_message(user_message);
-        }
-
         let model = self.config.model.clone();
         let temperature = self.config.temperature;
         let reasoning = self.config.reasoning;
         let workspace_root = {
-            let session = self.sessions.get(session_id).unwrap();
-            session.workspace_root.clone()
+            let session = self.sessions.get_mut(session_id)
+                .ok_or_else(|| anyhow::anyhow!("Session {} not found", session_id))?;
+            let root = session.workspace_root.clone();
+            session.add_user_message(user_message);
+            root
         };
         let native_tools = self.native_tool_definitions();
         let use_native_tools = self.supports_native_tool_calls();
@@ -353,6 +407,18 @@ impl CodingAgent {
 
         let mut full_content;
         loop {
+            // Check for cancellation before every iteration
+            if let Some(ref rx) = cancel_rx {
+                if *rx.borrow() {
+                    let msg = "[系統] 已取消生成。".to_string();
+                    if let Some(ref sink) = sink {
+                        sink(serde_json::json!({ "content": msg.clone(), "done": true }));
+                    }
+                    full_content = msg;
+                    break;
+                }
+            }
+
             if iteration >= max_iterations {
                 let msg = "[系統] 已達到最大工具呼叫次數限制，請確認結果。".to_string();
                 if let Some(ref sink) = sink {
@@ -401,10 +467,26 @@ impl CodingAgent {
                     .execute_native_tool_calls(session_id, msg, &workspace_root)
                     .await
                 {
+                    if let Some(ref sink) = sink {
+                        sink(serde_json::json!({ "content": null, "done": true }));
+                    }
                     continue;
                 }
 
+                // Fallback: model returned no native tool_calls but may have
+                // included XML tool syntax in the text content instead.
                 let content = msg.content.clone();
+                if self
+                    .execute_xml_tool_calls_if_any(session_id, &content, &workspace_root)
+                    .await
+                {
+                    if let Some(ref sink) = sink {
+                        sink(serde_json::json!({ "content": null, "done": true }));
+                    }
+                    continue;
+                }
+
+                let content = content;
                 if let Some(ref sink) = sink {
                     if text_before_tools.trim().is_empty() {
                         sink(serde_json::json!({ "content": content, "done": true }));
@@ -422,7 +504,9 @@ impl CodingAgent {
                 full_content = content;
                 break;
             } else if stream_mode {
-                let sink = sink.as_ref().unwrap().clone();
+                let sink = sink.as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Stream sink missing in stream mode"))?
+                    .clone();
                 let collected = Arc::new(StdMutex::new(String::new()));
                 let collected_clone = Arc::clone(&collected);
                 let sink_for_callback = sink.clone();
@@ -437,12 +521,6 @@ impl CodingAgent {
                                 sink_for_callback(serde_json::json!({
                                     "content": content.clone(),
                                     "done": false
-                                }));
-                            }
-                            if chunk.finish_reason.is_some() {
-                                sink_for_callback(serde_json::json!({
-                                    "content": null,
-                                    "done": true
                                 }));
                             }
                         }),
@@ -460,6 +538,7 @@ impl CodingAgent {
                     continue;
                 }
 
+                sink(serde_json::json!({ "content": null, "done": true }));
                 {
                     let session = self
                         .sessions

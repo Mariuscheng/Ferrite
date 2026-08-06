@@ -21,6 +21,7 @@ export function getWebviewHtml(extensionUri: vscode.Uri, cspSource: string): str
         readFileSafely(vscode.Uri.joinPath(webviewDir, 'markdown.js').fsPath),
         readFileSafely(vscode.Uri.joinPath(webviewDir, 'terminal.js').fsPath),
         readFileSafely(vscode.Uri.joinPath(webviewDir, 'plan-ui.js').fsPath),
+        readFileSafely(vscode.Uri.joinPath(webviewDir, 'diff-ui.js').fsPath),
         readFileSafely(vscode.Uri.joinPath(webviewDir, 'session-ui.js').fsPath),
         readFileSafely(vscode.Uri.joinPath(webviewDir, 'stream.js').fsPath),
         readFileSafely(vscode.Uri.joinPath(webviewDir, 'client.js').fsPath),
@@ -44,6 +45,7 @@ export function getWebviewHtml(extensionUri: vscode.Uri, cspSource: string): str
     </div>
     <div class="header-actions">
         <button class="icon-btn" id="workBtn" type="button" title="變更工作區">⚡ 工作</button>
+        <button class="icon-btn" id="agentBtn" type="button" title="Agent 功能">🤖 Agent</button>
         <button class="icon-btn" id="settingsBtn" type="button" title="設定">⚙ 設定</button>
     </div>
 </div>
@@ -93,6 +95,30 @@ export function getWebviewHtml(extensionUri: vscode.Uri, cspSource: string): str
     <div class="terminal-box" id="terminalBox" hidden>
         <div class="terminal-heading"><span>📺 執行輸出</span><button class="terminal-clear" id="clearTerminalBtn" type="button" title="清除終端輸出">清除</button></div>
         <pre class="terminal-output" id="terminalOutput" aria-live="polite"></pre>
+    </div>
+</div>
+
+<div class="agent-panel" id="agentPanel">
+    <div class="panel-heading"><div><h3>Agent 功能設定</h3><p>控制 Agent 的能力與行為</p></div></div>
+    <div class="settings-card">
+        <div class="settings-card-title">檔案操作</div>
+        <div class="form-group"><div class="toggle-row"><label>✏️ 編輯檔案</label><label class="toggle"><input type="checkbox" id="agEdit" checked /><span class="slider"></span></label></div></div>
+        <div class="form-group"><div class="toggle-row"><label>📖 讀取檔案</label><label class="toggle"><input type="checkbox" id="agRead" checked /><span class="slider"></span></label></div></div>
+        <div class="form-group"><div class="toggle-row"><label>📁 列出檔案</label><label class="toggle"><input type="checkbox" id="agList" checked /><span class="slider"></span></label></div></div>
+        <div class="form-group"><div class="toggle-row"><label>🔍 搜尋檔案</label><label class="toggle"><input type="checkbox" id="agSearch" checked /><span class="slider"></span></label></div></div>
+        <div class="form-group"><div class="toggle-row"><label>💾 寫入檔案</label><label class="toggle"><input type="checkbox" id="agWrite" checked /><span class="slider"></span></label></div></div>
+    </div>
+    <div class="settings-card">
+        <div class="settings-card-title">執行</div>
+        <div class="form-group"><div class="toggle-row"><label>▶️ 執行指令</label><label class="toggle"><input type="checkbox" id="agExec" checked /><span class="slider"></span></label></div></div>
+        <div class="form-group"><div class="toggle-row"><label>🧪 驗證結果</label><label class="toggle"><input type="checkbox" id="agValidate" checked /><span class="slider"></span></label></div></div>
+        <div class="form-group"><div class="toggle-row"><label>📋 產生方案</label><label class="toggle"><input type="checkbox" id="agPlan" checked /><span class="slider"></span></label></div></div>
+    </div>
+    <div class="settings-card">
+        <div class="settings-card-title">自動化</div>
+        <div class="form-group"><div class="toggle-row"><label>✅ 自動批准</label><label class="toggle"><input type="checkbox" id="agAuto" checked /><span class="slider"></span></label></div></div>
+        <div class="form-group"><div class="toggle-row"><label>🔄 自動重試</label><label class="toggle"><input type="checkbox" id="agRetry" /><span class="slider"></span></label></div></div>
+        <div class="form-group"><div class="toggle-row"><label>📝 Diff 預覽</label><label class="toggle"><input type="checkbox" id="agDiff" checked /><span class="slider"></span></label></div></div>
     </div>
 </div>
 

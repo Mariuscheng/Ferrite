@@ -7,6 +7,8 @@ slist = document.getElementById('sessionList');
 nsb = document.getElementById('newSessionBtn');
 sp = document.getElementById('settingsPanel');
 sBtn = document.getElementById('settingsBtn');
+ap = document.getElementById('agentPanel');
+aBtn = document.getElementById('agentBtn');
 wp = document.getElementById('workPanel');
 wBtn = document.getElementById('workBtn');
 wStatus = document.getElementById('workStatus');
@@ -29,6 +31,17 @@ svM = document.getElementById('saveMsg');
 keySt = document.getElementById('keyStatus');
 imgBtn = document.getElementById('imgBtn');
 imgInput = document.getElementById('imgInput');
+agEdit = document.getElementById('agEdit');
+agRead = document.getElementById('agRead');
+agList = document.getElementById('agList');
+agSearch = document.getElementById('agSearch');
+agWrite = document.getElementById('agWrite');
+agExec = document.getElementById('agExec');
+agValidate = document.getElementById('agValidate');
+agPlan = document.getElementById('agPlan');
+agAuto = document.getElementById('agAuto');
+agRetry = document.getElementById('agRetry');
+agDiff = document.getElementById('agDiff');
 
 // Element refs for plan-ui.js
 genPlanBtn = document.getElementById('genPlanBtn');
@@ -45,13 +58,22 @@ clearTerminalBtn = document.getElementById('clearTerminalBtn');
 
 var mi = document.getElementById('msgInp');
 var sb = document.getElementById('sndBtn');
+var stopRequested = false;
 
 function send() {
+    // If loading, this becomes a stop action
+    if (loading) {
+        stopRequested = true;
+        v.postMessage({ type: 'stopGeneration' });
+        return;
+    }
     var t = mi.value.trim();
-    if (!t || loading) return;
+    if (!t) return;
+    stopRequested = false;
     mi.value = '';
     mi.style.height = 'auto';
-    v.postMessage({ type: 'sendMessage', message: t });
+    var agentConfig = typeof getAgentConfig === 'function' ? getAgentConfig() : {};
+    v.postMessage({ type: 'sendMessage', message: t, agentConfig: agentConfig });
 }
 
 on(sb, 'click', send);
@@ -128,6 +150,7 @@ on(cP, 'change', function () {
 on(cT, 'input', function () { tV.textContent = cT.value; tLab.textContent = cT.value; });
 on(cR, 'change', function () { reGrp.style.display = cR.checked ? 'block' : 'none'; });
 on(sBtn, 'click', toggleSettingsPanel);
+on(aBtn, 'click', toggleAgentPanel);
 on(wBtn, 'click', toggleWorkPanel);
 on(svB, 'click', function () {
     svM.className = 'save-msg'; svM.textContent = '';
@@ -265,7 +288,21 @@ window.addEventListener('message', function (ev) {
         case 'loading':
             loading = d.isLoading;
             li.style.display = d.isLoading ? 'flex' : 'none';
-            sb.disabled = d.isLoading;
+            if (d.isLoading) {
+                // Transform send button to stop button
+                sb.textContent = '⏹ 停止';
+                sb.style.background = 'var(--vscode-inputValidation-errorBackground)';
+                sb.style.color = 'var(--vscode-inputValidation-errorForeground)';
+                sb.style.border = '1px solid var(--vscode-inputValidation-errorBorder)';
+            } else {
+                // Restore send button
+                sb.textContent = '➤ 發送';
+                sb.style.background = '';
+                sb.style.color = '';
+                sb.style.border = '';
+                stopRequested = false;
+            }
+            sb.disabled = false;
             mi.disabled = d.isLoading;
             break;
         case 'configData':
@@ -335,6 +372,27 @@ window.addEventListener('message', function (ev) {
             break;
         case 'streamChunk':
             renderStreamChunk(d.chunk);
+            if (d.chunk && d.chunk.done && stopRequested) {
+                stopRequested = false;
+            }
+            break;
+        case 'diffPreview':
+            // Render diff preview from an apply_diff dry-run result
+            if (typeof renderDiffViewer === 'function') {
+                var diffData = typeof d.result === 'string' ? JSON.parse(d.result) : d.result;
+                renderDiffViewer(diffData);
+            }
+            if (d.message) { addMsg('assistant', d.message); }
+            break;
+        case 'diffApplied':
+            // Diff has been applied to workspace
+            closeDiffViewer();
+            if (d.success) {
+                showToast('✅ ' + (d.message || 'Diff 已成功套用'), 'success', 3000);
+            } else {
+                showToast('❌ ' + (d.message || 'Diff 套用失敗'), 'error', 4000);
+            }
+            if (d.message) { addMsg('assistant', d.message); }
             break;
     }
 });

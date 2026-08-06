@@ -1,4 +1,5 @@
 pub mod command;
+pub mod diff_ops;
 pub mod file_ops;
 pub mod project;
 pub mod registry;
@@ -103,6 +104,9 @@ pub enum ToolName {
     CreateProject,
     Compile,
     RunTests,
+    ApplyDiff,
+    ListDiff,
+    GetFileDiff,
 }
 
 impl ToolName {
@@ -118,6 +122,9 @@ impl ToolName {
             ToolName::CreateProject => "create_project",
             ToolName::Compile => "compile",
             ToolName::RunTests => "run_tests",
+            ToolName::ApplyDiff => "apply_diff",
+            ToolName::ListDiff => "list_diff",
+            ToolName::GetFileDiff => "get_file_diff",
         }
     }
 }
@@ -136,6 +143,9 @@ impl FromStr for ToolName {
             "create_project" => Ok(ToolName::CreateProject),
             "compile" => Ok(ToolName::Compile),
             "run_tests" => Ok(ToolName::RunTests),
+            "apply_diff" => Ok(ToolName::ApplyDiff),
+            "list_diff" => Ok(ToolName::ListDiff),
+            "get_file_diff" => Ok(ToolName::GetFileDiff),
             other => Err(format!("Unknown tool: {}", other)),
         }
     }
@@ -187,7 +197,6 @@ mod tests {
         });
 
         let runtime = tokio::runtime::Runtime::new().unwrap();
-        let _guard = runtime.enter();
 
         let registry = ToolRegistry::with_event_sink(sink);
 

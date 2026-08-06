@@ -17,7 +17,7 @@ async fn main() -> Result<()> {
 
     tracing::info!("AI Agent sidecar starting");
 
-    let config = Config::load_default().await?;
+    let config = Config::load_default()?;
     let stdin = io::stdin();
     // Use tokio::sync::Mutex for the main loop (async context);
     // the two sink closures use std::sync::Mutex because they run in

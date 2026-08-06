@@ -4,12 +4,57 @@ import { SidecarManager, ToolEvent } from './sidecar';
 import { ChatMsg } from './constants';
 import { getWebviewHtml } from './webview/content';
 
+// ── In-memory diff content provider ─────────────────────────────────────────
+// Lets the extension open VS Code's native diff editor with the result of an
+// apply_diff dry-run preview: old (current on-disk file) vs new (previewed).
+// ----------------------------------------------------------------------------
+
+export class DiffContentProvider implements vscode.TextDocumentContentProvider {
+    private _contents = new Map<string, string>();
+
+    static scheme = 'ferrite-diff';
+
+    onDidChangeEmitter = new vscode.EventEmitter<vscode.Uri>();
+    onDidChange = this.onDidChangeEmitter.event;
+
+    async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
+        return this._contents.get(uri.toString()) ?? '';
+    }
+
+    setContent(uri: vscode.Uri, content: string): void {
+        this._contents.set(uri.toString(), content);
+        this.onDidChangeEmitter.fire(uri);
+    }
+}
+
+let diffContentProvider: DiffContentProvider | undefined;
+
+/**
+ * Register the in-memory diff content provider with VS Code.
+ * Called once during extension activation.
+ */
+export function registerDiffContentProvider(
+    context: vscode.ExtensionContext
+): DiffContentProvider {
+    const provider = new DiffContentProvider();
+    diffContentProvider = provider;
+    context.subscriptions.push(
+        vscode.workspace.registerTextDocumentContentProvider(
+            DiffContentProvider.scheme,
+            provider
+        )
+    );
+    return provider;
+}
+
 export class ChatViewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private _extensionUri: vscode.Uri;
     private _sidecar: SidecarManager;
     private _sessionId: string | null = null;
     private _latestPlan: any = null;
+    private _latestDiffPreview: any = null;
+    private _msgListenerDisposable: vscode.Disposable | null = null;
 
     constructor(extensionUri: vscode.Uri, sidecar: SidecarManager) {
         this._extensionUri = extensionUri;
@@ -28,26 +73,142 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         webviewView: vscode.WebviewView, _ctx: vscode.WebviewViewResolveContext,
         _t: vscode.CancellationToken
     ): void {
+        const previousView = this._view;
         this._view = webviewView;
         (webviewView as any).retainContextWhenHidden = true;
         webviewView.webview.options = { enableScripts: true, localResourceRoots: [this._extensionUri] };
-        webviewView.webview.html = getWebviewHtml(this._extensionUri, webviewView.webview.cspSource);
-        webviewView.webview.onDidReceiveMessage(async (d: any) => {
-            switch (d.type) {
-                case 'ready': await this._listSessions(); break;
-                case 'sendMessage': await this._chat(d.message); break;
-                case 'newSession': await this._newSession(); break;
-                case 'switchSession': await this._switchSession(d.sessionId); break;
-                case 'deleteSession': await this._deleteSession(d.sessionId); break;
-                case 'renameSession': await this._renameSession(d.sessionId, d.title); break;
-                case 'getConfig': await this._sendConfig(); break;
-                case 'saveConfig': await this._saveConfig(d.config); break;
-                case 'generatePlan': await this._generatePlan(d.goal); break;
-                case 'applyPlan': await this._applyPlan(Boolean(d.preview)); break;
-                case 'runValidation': await this._runValidation(); break;
-                case 'saveTerminalState': await this._saveTerminalState(d.state); break;
+
+        // Only (re)initialize the webview when it's actually a *new* instance
+        // (VS Code disposes & recreates the webview on certain lifecycle events).
+        const isNewInstance = (webviewView !== previousView);
+
+        if (isNewInstance) {
+            // Dispose the old listener first to prevent duplicate handlers.
+            if (this._msgListenerDisposable) {
+                this._msgListenerDisposable.dispose();
+                this._msgListenerDisposable = null;
             }
-        });
+
+            webviewView.webview.html = getWebviewHtml(this._extensionUri, webviewView.webview.cspSource);
+
+            this._msgListenerDisposable = webviewView.webview.onDidReceiveMessage(
+                async (d: any) => {
+                    switch (d.type) {
+                        case 'ready':
+                            await this._listSessions();
+                            // If we already have an active session, restore its messages
+                            // and terminal state into the fresh webview.
+                            if (this._sessionId) {
+                                await this._restoreSessionMessages();
+                            }
+                            break;
+                        case 'sendMessage': await this._chat(d.message, d.agentConfig); break;
+                        case 'stopGeneration': this._stopGeneration(); break;
+                        case 'newSession': await this._newSession(); break;
+                        case 'switchSession': await this._switchSession(d.sessionId); break;
+                        case 'deleteSession': await this._deleteSession(d.sessionId); break;
+                        case 'renameSession': await this._renameSession(d.sessionId, d.title); break;
+                        case 'getConfig': await this._sendConfig(); break;
+                        case 'saveConfig': await this._saveConfig(d.config); break;
+                        case 'generatePlan': await this._generatePlan(d.goal); break;
+                        case 'applyPlan': await this._applyPlan(Boolean(d.preview)); break;
+                        case 'runValidation': await this._runValidation(); break;
+                        case 'saveTerminalState': await this._saveTerminalState(d.state); break;
+                        case 'applyDiffFromPreview': await this._applyDiffFromPreview(d.patch, d.fuzz); break;
+                        case 'openDiffEditor': await this._openDiffEditor(d.file, d.previewData); break;
+                    }
+                },
+            );
+        }
+    }
+
+    /**
+     * Open the VS Code native diff editor for a file in the current preview.
+     * Uses an in-memory TextDocumentContentProvider for the "new" side so the
+     * user can inspect the previewed changes with full syntax highlighting.
+     */
+    private async _openDiffEditor(relPath: string, previewData?: any) {
+        const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '.';
+        try {
+            const originalUri = vscode.Uri.file(path.join(wsRoot, relPath));
+            const doc = await vscode.workspace.openTextDocument(originalUri);
+            const originalContent = doc.getText();
+
+            // The "new" (preview) side is served from an in-memory provider.
+            const newUri = vscode.Uri.parse(`${DiffContentProvider.scheme}:/${relPath}`);
+            if (diffContentProvider) {
+                diffContentProvider.setContent(newUri, originalContent); // placeholder; replaced below
+            }
+
+            // Use the preview data passed from the webview to build the "new" side.
+            // Fall back to the last stored preview from _applyDiffFromPreview.
+            const preview = (previewData && Array.isArray(previewData.previews))
+                ? previewData
+                : this._latestDiffPreview;
+            if (preview && Array.isArray(preview.previews)) {
+                const filePreview = preview.previews.find((p: any) => p.file === relPath);
+                if (filePreview && filePreview.hunks_preview) {
+                    const newContent = this._applyPreviewHunks(originalContent, filePreview.hunks_preview);
+                    diffContentProvider!.setContent(newUri, newContent);
+                }
+            }
+
+            await vscode.commands.executeCommand(
+                'vscode.diff',
+                doc.uri, // left: current on-disk file (original)
+                newUri,  // right: in-memory previewed content
+                `${relPath} — Ferrite Diff 預覽`
+            );
+        } catch (e: any) {
+            vscode.window.showErrorMessage('無法開啟 Diff 預覽: ' + (e.message || '未知錯誤'));
+        }
+    }
+
+    /**
+     * Apply hunk previews (old/new text) to the original content to produce
+     * the "new" file content for the native diff editor.
+     */
+    private _applyPreviewHunks(original: string, hunks: any[]): string {
+        let result = original;
+        // Apply hunks from the end to the start so line offsets don't shift.
+        const applied = hunks
+            .map((h, idx) => ({ h, idx }))
+            .filter(({ h }) => h && h.applied && h.old_text !== '');
+        for (const { h, idx } of applied.reverse()) {
+            const oldText = String(h.old_text || '');
+            const newText = String(h.new_text || '');
+            const at = result.lastIndexOf(oldText);
+            if (at >= 0) {
+                result = result.slice(0, at) + newText + result.slice(at + oldText.length);
+            }
+        }
+        return result;
+    }
+
+    private async _restoreSessionMessages(): Promise<void> {
+        if (!this._sessionId) return;
+        try {
+            const r = await this._sidecar.sendRequest('getSessionMessages', { sessionId: this._sessionId });
+            this._post({ type: 'clearMessages' });
+            const msgs = (r.messages || []) as ChatMsg[];
+            for (const m of msgs) {
+                if (m.role === 'system' || m.role === 'tool') { continue; }
+                const content = String(m.content || '').trim();
+                if (m.role === 'assistant' && (content.startsWith('[Tool Call:') || content.length === 0)) { continue; }
+                if (m.role === 'user' && content.startsWith('[Tool result:')) { continue; }
+                this._post({ type: 'message', message: m });
+            }
+            if (r.terminalState) {
+                this._post({ type: 'terminalState', state: r.terminalState });
+            }
+        } catch (e: any) {
+            console.error('Failed to restore session messages:', e);
+        }
+    }
+
+    private _stopGeneration(): void {
+        this._post({ type: 'loading', isLoading: false });
+        this._sidecar.sendRequest('stopGeneration', {}).catch(() => {});
     }
 
     private async _listSessions() {
@@ -82,7 +243,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 if (m.role === 'user' && content.startsWith('[Tool result:')) { continue; }
                 this._post({ type: 'message', message: m });
             }
-            // Restore terminal state if present
             if (r.terminalState) {
                 this._post({ type: 'terminalState', state: r.terminalState });
             }
@@ -105,7 +265,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         } catch (e: any) { this._post({ type: 'error', message: e.message }); }
     }
 
-    private async _chat(msg: string) {
+    private async _chat(msg: string, agentConfig?: any) {
         if (!this._sessionId) { await this._newSession(); }
         if (!this._sessionId) { this._post({ type: 'error', message: '無法建立對話' }); return; }
         const originalSessionId = this._sessionId;
@@ -351,6 +511,48 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         } catch (e: any) { this._post({ type: 'configSaved', success: false, message: e.message }); }
     }
 
+    private async _applyDiffFromPreview(patch: string, fuzz: number) {
+        const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '.';
+        this._post({ type: 'loading', isLoading: true });
+        try {
+            const preview = await this._sidecar.sendRequest('applyDiff', {
+                workspaceRoot: wsRoot,
+                patch,
+                dryRun: true,
+                fuzz: fuzz || 3,
+            });
+            const parsedPreview = typeof preview === 'string' ? JSON.parse(preview) : preview;
+            this._latestDiffPreview = parsedPreview;
+            this._post({
+                type: 'diffPreview',
+                result: parsedPreview,
+                message: 'Diff 預覽：' + (parsedPreview.files || 0) + ' 個檔案，' + (parsedPreview.applicableHunks || 0) + '/' + (parsedPreview.totalHunks || 0) + ' 個區塊可套用',
+            });
+
+            const applied = await this._sidecar.sendRequest('applyDiff', {
+                workspaceRoot: wsRoot,
+                patch,
+                dryRun: false,
+                fuzz: fuzz || 3,
+            });
+            const parsedApplied = typeof applied === 'string' ? JSON.parse(applied) : applied;
+            this._post({
+                type: 'diffApplied',
+                success: true,
+                message: 'Diff 已套用：' + (parsedApplied.filesApplied || 0) + ' 個檔案成功',
+                result: parsedApplied,
+            });
+        } catch (e: any) {
+            this._post({
+                type: 'diffApplied',
+                success: false,
+                message: 'Diff 套用失敗: ' + (e.message || '未知錯誤'),
+            });
+        } finally {
+            this._post({ type: 'loading', isLoading: false });
+        }
+    }
+
     private async _saveTerminalState(state: string) {
         if (!this._sessionId) { return; }
         try {
@@ -359,7 +561,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 state,
             });
         } catch (e: any) {
-            // Terminal persistence is best-effort; don't interrupt the user.
             console.error('Failed to save terminal state:', e);
         }
     }
