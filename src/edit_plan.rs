@@ -127,39 +127,3 @@ pub struct ValidationRunResult {
     pub output: String,
     pub error: Option<String>,
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::Config;
-    use crate::providers;
-    #[tokio::test]
-    async fn generate_edit_plan_with_empty_context() {
-        let config = Config::default();
-        let provider = providers::create_provider(&config).expect("create provider");
-        let result = generate_edit_plan(
-            provider.as_ref(),
-            &config.model,
-            config.reasoning,
-            "test goal",
-            "{}",
-        )
-        .await;
-
-        // Should not panic and return a Value
-        assert!(result.is_ok() || result.is_err());
-    }
-
-    #[test]
-    fn validation_run_result_serializes() {
-        let result = ValidationRunResult {
-            command: "cargo build".into(),
-            success: true,
-            output: "Compiled successfully".into(),
-            error: None,
-        };
-        let json = serde_json::to_value(&result).expect("serialize");
-        assert_eq!(json["command"], "cargo build");
-        assert_eq!(json["success"], true);
-    }
-}

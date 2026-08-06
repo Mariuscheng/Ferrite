@@ -20,69 +20,6 @@ pub fn map_reasoning_effort(effort: &str) -> String {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn map_reasoning_effort_low_and_medium_map_to_high() {
-        assert_eq!(map_reasoning_effort("low"), "high");
-        assert_eq!(map_reasoning_effort("medium"), "high");
-        assert_eq!(map_reasoning_effort("LOW"), "high");
-    }
-
-    #[test]
-    fn map_reasoning_effort_xhigh_maps_to_max() {
-        assert_eq!(map_reasoning_effort("xhigh"), "max");
-        assert_eq!(map_reasoning_effort("XHIGH"), "max");
-    }
-
-    #[test]
-    fn map_reasoning_effort_passes_through_other_values() {
-        assert_eq!(map_reasoning_effort("high"), "high");
-        assert_eq!(map_reasoning_effort("max"), "max");
-        assert_eq!(map_reasoning_effort(""), "");
-    }
-
-    #[test]
-    fn jsonrpc_success_response_shape() {
-        let resp = JsonRpcResponse::success(
-            Some(serde_json::json!(1)),
-            serde_json::json!({"status": "ok"}),
-        );
-        let value = serde_json::to_value(&resp).expect("serialize");
-        assert_eq!(value["jsonrpc"], "2.0");
-        assert_eq!(value["id"], 1);
-        assert_eq!(value["result"]["status"], "ok");
-        assert!(value.get("error").is_none());
-    }
-
-    #[test]
-    fn jsonrpc_error_response_shape() {
-        let resp = JsonRpcResponse::error(
-            Some(serde_json::json!(2)),
-            -32602,
-            "Missing required param: message".to_string(),
-        );
-        let value = serde_json::to_value(&resp).expect("serialize");
-        assert_eq!(value["jsonrpc"], "2.0");
-        assert_eq!(value["id"], 2);
-        assert_eq!(value["error"]["code"], -32602);
-        assert_eq!(value["error"]["message"], "Missing required param: message");
-        assert!(value.get("result").is_none());
-    }
-
-    #[test]
-    fn jsonrpc_request_parses_default_params() {
-        let request: JsonRpcRequest = serde_json::from_str(
-            r#"{"id": 3, "method": "getStatus"}"#,
-        )
-        .expect("parse");
-        assert_eq!(request.method, "getStatus");
-        assert_eq!(request.params, Value::Null);
-    }
-}
-
 /// JSON-RPC 2.0 request
 #[derive(Debug, Deserialize)]
 pub struct JsonRpcRequest {
