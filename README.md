@@ -38,7 +38,7 @@
 | 供應商 | 設定值 | 需要 API Key | 支援原生 Tool Calls |
 |---|---|---|---|
 | DeepSeek | `deepseek` | ✅ | ✅ |
-| OpenAI | `openai` | ✅ | ✅ |
+| OpenAI | `openai`（亦接受 `azure` 別名） | ✅ | ✅ |
 | Anthropic | `anthropic` | ✅ | ✅ |
 | Ollama | `ollama` | ❌（本機） | ❌ |
 
@@ -51,9 +51,14 @@
 - 📂 **工作區感知**：AI 能瀏覽和理解你的整個專案結構
 - 🌊 **串流回應**：即時顯示 AI 生成內容
 - 🧠 **思考模式（Reasoning）**：AI 回覆前先進行分析與規劃（支援 DeepSeek reasoning）
+- 📋 **編輯計劃（Edit Plan）**：AI 先產出修改方案（plan），可預覽、套用並執行驗證
+- 🧪 **驗證執行（Validation）**：對修改後的專案執行編譯 / 測試命令驗證結果
+- 📑 **原生 Diff 預覽編輯器**：以 VS Code 原生 diff 編輯器檢視套用前後的變更
+- 📺 **終端機輸出**：顯示 `execute_command` 的即時輸出，並隨對話保存 / 恢復
+- 🖼️ **圖片附件**：可直接在對話中附加圖片（依供應商能力）
 - 🔄 **自動重試**：API 暫時性錯誤（429 / 5xx）自動重試 3 次，指數退避
-- ⚙️ **細緻設定**：供應商、模型、溫度、逾時時間皆可調
-- 💾 **對話管理**：支援多個對話、清除歷史
+- ⚙️ **細緻設定**：供應商、模型、溫度、逾時時間、Shell 模板、最大工具呼叫次數皆可調
+- 💾 **對話管理**：支援多個對話、重命名、刪除、清除歷史
 
 ---
 
@@ -72,6 +77,9 @@ AI 可以呼叫以下工具來操作你的專案：
 | `create_project` | 建立新專案結構 |
 | `compile` | 編譯專案 |
 | `run_tests` | 執行測試 |
+| `apply_diff` | 以 unified diff 套用變更（支援 fuzz 模糊匹配、dry-run 預覽、自動 `.ferrite-bak` 備份） |
+| `list_diff` | 列出 Agent 透過 `apply_diff` 修改過的檔案 |
+| `get_file_diff` | 取得單一檔案修改前後的 unified diff |
 
 ---
 
@@ -125,7 +133,9 @@ code --install-extension ferrite-0.1.0.vsix
   "ferrite.temperature": 0.3,
   "ferrite.timeoutSeconds": 120,
   "ferrite.reasoning": false,
-  "ferrite.reasoningEffort": "high"
+  "ferrite.reasoningEffort": "high",
+  "ferrite.maxToolIterations": 25,
+  "ferrite.shell": "cmd /C {cmd}"
 }
 ```
 
@@ -153,9 +163,15 @@ code --install-extension ferrite-0.1.0.vsix
 │   ├── providers/          # 各供應商實作
 │   │   ├── deepseek.rs
 │   │   ├── openai.rs
+│   │   ├── openai_compat.rs # OpenAI 相容格式共用工具
 │   │   ├── anthropic.rs
 │   │   └── ollama.rs
 │   ├── tools/              # 工具實作
+│   │   ├── diff_ops.rs     # Diff 套用 / 預覽 / 備份
+│   │   ├── file_ops.rs
+│   │   ├── command.rs
+│   │   ├── project.rs
+│   │   └── registry.rs
 │   ├── session.rs          # 對話管理
 │   ├── agent.rs            # Agent 主邏輯
 │   ├── context.rs          # 工作區上下文
@@ -166,14 +182,17 @@ code --install-extension ferrite-0.1.0.vsix
 │   ├── extension.ts        # 擴充功能入口
 │   ├── sidecar.ts          # Sidecar 行程管理
 │   ├── chatView.ts         # Webview 提供者
-│   ├── constants.ts        # 常數定義
-│   └── webview/            # Webview 資源
+│   ├── constants.ts        # 常數定義（模型清單、Endpoint 預設）
+│   └── webview/
+│       └── content.ts      # Webview HTML 模板
 ├── webview/                # Webview 前端
 │   ├── client.js           # RPC 客戶端
 │   ├── markdown.js         # Markdown 渲染
 │   ├── stream.js           # 串流處理
 │   ├── session-ui.js       # 對話 UI
 │   ├── plan-ui.js          # 計劃顯示 UI
+│   ├── diff-ui.js          # Diff 預覽 UI
+│   ├── terminal.js         # 終端機輸出 UI
 │   ├── dom-helpers.js      # DOM 輔助函式
 │   ├── toast.js            # 通知元件
 │   └── styles.css          # 樣式
@@ -202,5 +221,6 @@ MIT License
 ## 已知限制
 
 - 部分 AI 供應商不支援原生 tool_calls，依賴文字解析
-- Windows 上 `execute_command` 使用 `cmd /C`，與 Unix shell 行為有差異
+- Windows 上 `execute_command` 預設使用 `cmd /C {cmd}`，與 Unix shell 行為有差異（可透過 `ferrite.shell` 自訂模板）
 - Ollama 工具呼叫僅支援文字解析模式（無原生 function calling）
+- 圖片附件是否可用取決於所選供應商與模型是否支援多模態輸入
