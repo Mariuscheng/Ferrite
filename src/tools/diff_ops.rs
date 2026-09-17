@@ -237,7 +237,7 @@ pub fn parse_unified_diff(patch: &str) -> Result<Vec<ParsedDiff>, String> {
         // Allow trailing \r (Windows line endings mixed in)
         let line = line.trim_end_matches('\r');
 
-        if line.starts_with("--- ") {
+        if let Some(rest) = line.strip_prefix("--- ") {
             // Start of a new file diff — finalise the previous file
             if let Some(mut diff) = current_diff.take() {
                 if let Some(hunk) = current_hunk.take() {
@@ -245,7 +245,7 @@ pub fn parse_unified_diff(patch: &str) -> Result<Vec<ParsedDiff>, String> {
                 }
                 diffs.push(diff);
             }
-            let original = line[4..].trim().to_string();
+            let original = rest.trim().to_string();
             current_diff = Some(ParsedDiff {
                 original_path: original,
                 new_path: String::new(),
@@ -254,8 +254,8 @@ pub fn parse_unified_diff(patch: &str) -> Result<Vec<ParsedDiff>, String> {
             continue;
         }
 
-        if line.starts_with("+++ ") {
-            let new_path = line[4..].trim().to_string();
+        if let Some(rest) = line.strip_prefix("+++ ") {
+            let new_path = rest.trim().to_string();
             if let Some(ref mut diff) = current_diff {
                 diff.new_path = new_path;
             } else {
@@ -294,20 +294,20 @@ pub fn parse_unified_diff(patch: &str) -> Result<Vec<ParsedDiff>, String> {
 
         // Accumulate lines into the current hunk
         if let Some(ref mut hunk) = current_hunk {
-            if line.starts_with(' ') {
+            if let Some(rest) = line.strip_prefix(' ') {
                 hunk.lines.push(DiffLine {
                     kind: DiffLineKind::Context,
-                    text: line[1..].to_string(),
+                    text: rest.to_string(),
                 });
-            } else if line.starts_with('-') {
+            } else if let Some(rest) = line.strip_prefix('-') {
                 hunk.lines.push(DiffLine {
                     kind: DiffLineKind::Removed,
-                    text: line[1..].to_string(),
+                    text: rest.to_string(),
                 });
-            } else if line.starts_with('+') {
+            } else if let Some(rest) = line.strip_prefix('+') {
                 hunk.lines.push(DiffLine {
                     kind: DiffLineKind::Added,
-                    text: line[1..].to_string(),
+                    text: rest.to_string(),
                 });
             } else if line.is_empty() {
                 // Empty line in context — treat as context

@@ -252,7 +252,21 @@ fn describe_change(search: &str, replace: &str) -> String {
     )
 }
 
-pub async fn tool_search_files(args: Value, workspace_root: &str) -> ToolResult {
+/// Run the blocking recursive file search off the async executor so a large
+/// workspace scan doesn't stall the sidecar's event loop (stream chunks, RPC).
+pub async fn tool_search_files(args: Value, workspace_root: String) -> ToolResult {
+    match tokio::task::spawn_blocking(move || tool_search_files_sync(&args, &workspace_root)).await
+    {
+        Ok(result) => result,
+        Err(e) => ToolResult {
+            success: false,
+            content: String::new(),
+            error: Some(format!("search_files 執行失敗: {}", e)),
+        },
+    }
+}
+
+fn tool_search_files_sync(args: &Value, workspace_root: &str) -> ToolResult {
     let pattern = args["pattern"].as_str().unwrap_or("");
     let search_path = args["path"].as_str().unwrap_or(".");
     let file_pattern = args["file_pattern"].as_str();
@@ -369,7 +383,20 @@ fn glob_match(pattern: &str, filename: &str) -> bool {
     filename.contains(pattern.trim_matches('*'))
 }
 
-pub async fn tool_list_files(args: Value, workspace_root: &str) -> ToolResult {
+/// Run the blocking recursive directory listing off the async executor.
+pub async fn tool_list_files(args: Value, workspace_root: String) -> ToolResult {
+    match tokio::task::spawn_blocking(move || tool_list_files_sync(&args, &workspace_root)).await
+    {
+        Ok(result) => result,
+        Err(e) => ToolResult {
+            success: false,
+            content: String::new(),
+            error: Some(format!("list_files 執行失敗: {}", e)),
+        },
+    }
+}
+
+fn tool_list_files_sync(args: &Value, workspace_root: &str) -> ToolResult {
     let path = args["path"].as_str().unwrap_or(".");
     let recursive = args["recursive"].as_bool().unwrap_or(false);
 

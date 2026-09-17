@@ -27,6 +27,10 @@ pub fn check_dangerous_command(command: &str) -> Option<String> {
         ("mkfs.", "檔案系統格式化 (mkfs)"),
         ("dd if=", "磁碟直接寫入 (dd)"),
         ("> /dev/sd", "寫入磁碟裝置"),
+        ("shutdown /", "關機指令 (shutdown)"),
+        ("shutdown -h", "關機指令 (shutdown)"),
+        ("fdisk ", "磁碟分割 (fdisk)"),
+        ("git clean -f", "強制清除未追蹤檔案 (git clean -f)"),
     ];
 
     for (pattern, description) in dangerous_patterns {

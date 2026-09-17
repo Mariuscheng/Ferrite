@@ -172,8 +172,8 @@ pub fn extract_xml_params_manual(inner: &str) -> serde_json::Value {
 
     while let Some(start) = remaining.find('<') {
         let after_open = &remaining[start + 1..];
-        if after_open.starts_with('/') {
-            remaining = &after_open[1..];
+        if let Some(rest) = after_open.strip_prefix('/') {
+            remaining = rest;
             continue;
         }
         let Some(open_end) = after_open.find('>') else {

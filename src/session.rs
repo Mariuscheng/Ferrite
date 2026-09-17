@@ -137,7 +137,7 @@ impl AgentSession {
             // its tool results sit immediately after it.  Evict them together
             // so the history never contains orphaned Tool messages.
             if self.messages[1].role == Role::Assistant
-                && self.messages[1].tool_calls.as_ref().map_or(false, |tc| !tc.is_empty())
+                && self.messages[1].tool_calls.as_ref().is_some_and(|tc| !tc.is_empty())
             {
                 let mut idx = 2;
                 while idx < self.messages.len()

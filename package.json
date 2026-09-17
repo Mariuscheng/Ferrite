@@ -3,7 +3,7 @@
   "displayName": "Ferrite",
   "description": "Rust-powered AI sidecar for VS Code — supports DeepSeek, OpenAI, Anthropic, and Ollama",
   "license": "MIT",
-  "repository": { "type": "git", "url": "" },
+  "repository": { "type": "git", "url": "https://github.com/Mariuscheng/Ferrite.git" },
   "version": "0.1.0",
   "publisher": "ferrite",
   "engines": {

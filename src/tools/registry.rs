@@ -424,10 +424,10 @@ Returns the unified diff string (same format as `git diff`).".into(),
                 crate::tools::file_ops::tool_replace_in_file(args, workspace_root).await
             }
             ToolName::SearchFiles => {
-                crate::tools::file_ops::tool_search_files(args, workspace_root).await
+                crate::tools::file_ops::tool_search_files(args, workspace_root.to_string()).await
             }
             ToolName::ListFiles => {
-                crate::tools::file_ops::tool_list_files(args, workspace_root).await
+                crate::tools::file_ops::tool_list_files(args, workspace_root.to_string()).await
             }
             ToolName::ExecuteCommand => {
                 crate::tools::command::tool_execute_command(

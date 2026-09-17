@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex as StdMutex};
 
@@ -29,6 +29,8 @@ pub struct CodingAgent {
     /// Cached tools prompt string: (use_native_tool_calls, prompt_text).
     /// Invalidated on reconfigure.
     cached_tools_prompt: Option<(bool, String)>,
+    /// Session ids with unsaved changes — `save_sessions` only rewrites these.
+    dirty_sessions: HashSet<String>,
 }
 
 impl CodingAgent {
@@ -52,6 +54,7 @@ impl CodingAgent {
             sessions: HashMap::new(),
             cached_native_tool_defs: None,
             cached_tools_prompt: None,
+            dirty_sessions: HashSet::new(),
         };
         agent.load_sessions();
         Ok(agent)
@@ -67,13 +70,22 @@ impl CodingAgent {
         Self::sessions_dir().join(format!("{}.json", session_id))
     }
 
-    fn save_sessions(&self) {
+    fn save_sessions(&mut self) {
+        if self.dirty_sessions.is_empty() {
+            return;
+        }
         let dir = Self::sessions_dir();
         if let Err(e) = std::fs::create_dir_all(&dir) {
             tracing::warn!("Failed to create sessions dir {:?}: {}", dir, e);
             return;
         }
-        for session in self.sessions.values() {
+        // Only rewrite sessions that actually changed instead of serializing
+        // the entire session set after every chat turn.
+        let dirty = std::mem::take(&mut self.dirty_sessions);
+        for id in &dirty {
+            let Some(session) = self.sessions.get(id) else {
+                continue;
+            };
             let snapshot = SessionSnapshot::from_session(session);
             match serde_json::to_string_pretty(&snapshot) {
                 Ok(json) => {
@@ -170,6 +182,7 @@ impl CodingAgent {
         );
         let session = AgentSession::new(id.clone(), workspace_root.to_string(), system_prompt);
         self.sessions.insert(id.clone(), session);
+        self.dirty_sessions.insert(id.clone());
         self.save_sessions();
         id
     }
@@ -187,7 +200,8 @@ impl CodingAgent {
         if removed {
             let path = Self::session_file_path(id);
             let _ = std::fs::remove_file(&path);
-            self.save_sessions();
+            // No other session changed — just drop the dirty marker.
+            self.dirty_sessions.remove(id);
         }
         removed
     }
@@ -217,6 +231,7 @@ impl CodingAgent {
     pub fn save_terminal_state(&mut self, id: &str, state: &str) -> bool {
         if let Some(session) = self.sessions.get_mut(id) {
             session.metadata.insert("terminalState".into(), state.to_string());
+            self.dirty_sessions.insert(id.to_string());
             self.save_sessions();
             true
         } else {
@@ -227,6 +242,7 @@ impl CodingAgent {
     pub fn rename_session(&mut self, id: &str, title: &str) -> bool {
         if let Some(session) = self.sessions.get_mut(id) {
             session.title = title.to_string();
+            self.dirty_sessions.insert(id.to_string());
             self.save_sessions();
             true
         } else {
@@ -411,6 +427,7 @@ impl CodingAgent {
             session.add_user_message(user_message);
             root
         };
+        self.dirty_sessions.insert(session_id.to_string());
         let native_tools = self.native_tool_definitions();
         let use_native_tools = self.supports_native_tool_calls();
 
@@ -677,7 +694,10 @@ impl CodingAgent {
         let mut merged: Vec<ChatMessage> = Vec::new();
         for msg in messages {
             if let Some(last) = merged.last_mut() {
-                if last.role == msg.role {
+                // Only merge consecutive *assistant* messages (one assistant
+                // turn spans several internal messages during tool-call
+                // iterations).  Distinct user turns must stay separate.
+                if last.role == msg.role && msg.role == Role::Assistant {
                     last.content.push('\n');
                     last.content.push_str(&msg.content);
                     continue;
@@ -697,6 +717,8 @@ impl CodingAgent {
         session
             .metadata
             .insert("ide_context".into(), serde_json::to_string(context)?);
+        // Persisted by the next save_sessions() (e.g. end of a chat turn).
+        self.dirty_sessions.insert(session_id.to_string());
         Ok(())
     }
 
