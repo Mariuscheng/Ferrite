@@ -19,11 +19,9 @@ async fn main() -> Result<()> {
 
     let config = Config::load_default()?;
     let stdin = io::stdin();
-    // Use tokio::sync::Mutex for the main loop (async context);
-    // the two sink closures use std::sync::Mutex because they run in
-    // sync Fn callbacks where lock duration is a single writeln+flush.
-    let stdout = Arc::new(AsyncMutex::new(io::stdout()));
-    // Single shared stdout handle for both streaming and tool-event sinks.
+    // Single shared stdout handle for streaming notifications, tool events,
+    // and final responses.  One mutex for everything prevents output lines
+    // from interleaving (a streamChunk line mixed into a JSON-RPC response).
     let notification_stdout: Arc<StdMutex<io::Stdout>> = Arc::new(StdMutex::new(io::stdout()));
 
     let stream_chunk_sink: StreamChunkSink = {
@@ -98,10 +96,11 @@ async fn main() -> Result<()> {
             }
         };
 
-        let mut out = stdout.lock().await;
         let resp_str = serde_json::to_string(&resp)?;
-        writeln!(out, "{}", resp_str)?;
-        out.flush()?;
+        if let Ok(mut out) = notification_stdout.lock() {
+            let _ = writeln!(out, "{}", resp_str);
+            let _ = out.flush();
+        }
     }
 
     Ok(())

@@ -278,11 +278,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 this._post({ type: 'sessionRecovered', sessionId: this._sessionId });
                 await this._listSessions();
             }
-            if (r.content && r.content !== '[系統] 未取得回應') {
-                this._post({ type: 'streamChunk', chunk: { content: null, done: true } });
-            }
         } catch (e: any) { this._post({ type: 'error', message: '錯誤: ' + e.message }); }
-        finally { this._post({ type: 'loading', isLoading: false }); }
+        finally {
+            // Always finalize the streaming bubble (including error paths),
+            // otherwise the webview's stream buffer leaks into the next reply.
+            this._post({ type: 'streamChunk', chunk: { content: null, done: true } });
+            this._post({ type: 'loading', isLoading: false });
+        }
     }
 
     private async _chatWithStreamRecovery(msg: string): Promise<any> {

@@ -193,12 +193,24 @@ impl CodingAgent {
     }
 
     pub fn list_sessions(&self) -> Vec<SessionInfo> {
-        self.sessions
+        // HashMap iteration order is random — sort by creation time so the
+        // session sidebar order stays stable across runs and restarts.
+        let mut entries: Vec<(u64, String, String)> = self
+            .sessions
             .iter()
-            .map(|(id, s)| SessionInfo {
-                id: id.clone(),
-                title: s.title.clone(),
+            .map(|(id, s)| {
+                let created_at = s
+                    .metadata
+                    .get("created_at")
+                    .and_then(|v| v.parse::<u64>().ok())
+                    .unwrap_or(0);
+                (created_at, id.clone(), s.title.clone())
             })
+            .collect();
+        entries.sort_by_key(|(created_at, _, _)| *created_at);
+        entries
+            .into_iter()
+            .map(|(_, id, title)| SessionInfo { id, title })
             .collect()
     }
 
@@ -486,7 +498,6 @@ impl CodingAgent {
                     continue;
                 }
 
-                let content = content;
                 if let Some(ref sink) = sink {
                     if text_before_tools.trim().is_empty() {
                         sink(serde_json::json!({ "content": content, "done": true }));

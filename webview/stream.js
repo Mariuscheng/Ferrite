@@ -94,7 +94,7 @@ function addMsg(r, c) {
         div.appendChild(meta);
     }
     var content = makeNode('div', 'message-content');
-    if (r === 'assistant') { renderMarkdown(content, String(c || '')); }
+    if (r === 'assistant' || r === 'user') { renderMarkdown(content, String(c || '')); }
     else { content.textContent = String(c || ''); }
     div.appendChild(content);
     mc.insertBefore(div, li);

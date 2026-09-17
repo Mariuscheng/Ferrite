@@ -10,6 +10,12 @@ pub struct ToolRegistry {
     shell_template: String,
 }
 
+impl Default for ToolRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ToolRegistry {
     pub fn new() -> Self {
         let execute_desc = if cfg!(target_os = "windows") {

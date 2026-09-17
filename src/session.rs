@@ -98,6 +98,13 @@ impl AgentSession {
         session
             .metadata
             .insert("session_id".into(), session.session_id().to_string());
+        let now_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        session
+            .metadata
+            .insert("created_at".into(), now_secs.to_string());
         session
     }
 
@@ -192,6 +199,7 @@ impl AgentSession {
             name: None,
             tool_calls: None,
         });
+        self.maybe_trim();
         self.mark_dirty();
     }
 
@@ -203,6 +211,7 @@ impl AgentSession {
             name: None,
             tool_calls: None,
         });
+        self.maybe_trim();
         self.mark_dirty();
     }
 
@@ -220,6 +229,7 @@ impl AgentSession {
             name: None,
             tool_calls: None,
         });
+        self.maybe_trim();
         self.mark_dirty();
     }
 

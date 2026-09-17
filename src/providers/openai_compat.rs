@@ -107,8 +107,17 @@ pub fn build_http_client(timeout: std::time::Duration) -> Result<Client> {
 
 /// Normalize the endpoint URL for the `/chat/completions` path, with
 /// optional `/v1` path handling (DeepSeek compatible).
+///
+/// If the endpoint already contains the full `/chat/completions` path, it is
+/// returned unchanged — appending again would produce a broken double-path
+/// URL (e.g. `.../chat/completions/chat/completions`).
 pub fn normalize_chat_url(endpoint: &str, ensure_v1: bool) -> String {
     let base = endpoint.trim_end_matches('/');
+
+    if base.ends_with("/chat/completions") {
+        return base.to_string();
+    }
+
     if ensure_v1 {
         if base.ends_with("/v1") {
             format!("{}/chat/completions", base)
@@ -116,11 +125,7 @@ pub fn normalize_chat_url(endpoint: &str, ensure_v1: bool) -> String {
             format!("{}/v1/chat/completions", base)
         }
     } else {
-        if base.ends_with('/') {
-            format!("{}chat/completions", base)
-        } else {
-            format!("{}/chat/completions", base)
-        }
+        format!("{}/chat/completions", base)
     }
 }
 

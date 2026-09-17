@@ -43,7 +43,10 @@ function renderMarkdown(container, content) {
     function flushParagraph() {
         if (!paragraph.length) { return; }
         var p = makeNode('p', '');
-        appendInline(p, paragraph.join(' '));
+        paragraph.forEach(function (line, idx) {
+            if (idx > 0) { p.appendChild(makeNode('br', '')); }
+            appendInline(p, line);
+        });
         container.appendChild(p);
         paragraph = [];
     }

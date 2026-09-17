@@ -662,8 +662,7 @@ pub fn get_file_diff(
     rel_path: &str,
 ) -> Result<String, String> {
     let full_path =
-        ToolRegistry::resolve_workspace_path(workspace_root, rel_path, "get_file_diff")
-            .map_err(|e| e)?;
+        ToolRegistry::resolve_workspace_path(workspace_root, rel_path, "get_file_diff")?;
 
     // Locate the .ferrite-bak snapshot next to the file.
     let fname = full_path

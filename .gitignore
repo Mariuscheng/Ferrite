@@ -1,0 +1,40 @@
+# ---- One-off dev scratch scripts ----
+check_indent.py
+fix_agent.py
+
+# ---- Rust build artifacts ----
+target/
+
+# ---- Node ----
+node_modules/
+
+# ---- VS Code Extension ----
+*.vsix
+*.zip
+out/
+bin/
+
+# ---- Ferrite runtime artifacts ----
+*.ferrite-bak
+
+# ---- Logs ----
+*.log
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+
+# ---- AI assistant tool directories ----
+.kiro/
+.tsupgrader/
+
+# ---- IDE / Editor ----
+.vscode/
+.idea/
+.vscode-test/
+
+# ---- OS files ----
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
